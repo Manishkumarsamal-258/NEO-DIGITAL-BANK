@@ -1,0 +1,465 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import AppLayout from '@/components/layout/AppLayout';
+import { requireAuth } from '@/lib/auth';
+import { formatDate } from '@/lib/mockData';
+import api from '@/services/api';
+import type { KycDocument } from '@/types';
+import {
+  IdCard, Upload, CheckCircle2, XCircle, Clock, Loader2,
+  Fingerprint, ShieldCheck, X, Sparkles,
+  Camera, FileText, ArrowRight, PartyPopper, Trophy,
+  Ban, ChevronRight
+} from 'lucide-react';
+import { toast } from 'sonner';
+
+const DOCUMENT_TYPE_OPTIONS = [
+  { value: 'AADHAR', label: 'Aadhaar Card', color: 'bg-orange-100 text-orange-700 border-orange-200' },
+  { value: 'PAN', label: 'PAN Card', color: 'bg-blue-100 text-blue-700 border-blue-200' },
+  { value: 'VOTER_ID', label: 'Voter ID', color: 'bg-purple-100 text-purple-700 border-purple-200' },
+  { value: 'DRIVING_LICENSE', label: 'Driving License', color: 'bg-cyan-100 text-cyan-700 border-cyan-200' },
+  { value: 'PASSPORT', label: 'Passport', color: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
+];
+
+const DOCUMENT_TYPE_COLORS: Record<string, string> = {
+  AADHAR: 'bg-orange-100 text-orange-700',
+  PAN: 'bg-blue-100 text-blue-700',
+  VOTER_ID: 'bg-purple-100 text-purple-700',
+  DRIVING_LICENSE: 'bg-cyan-100 text-cyan-700',
+  PASSPORT: 'bg-emerald-100 text-emerald-700',
+};
+
+export default function KycUpload() {
+  const navigate = useNavigate();
+  const [user, setUser] = useState<any>(null);
+  const [existingDocs, setExistingDocs] = useState<KycDocument[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Form state
+  const [documentType, setDocumentType] = useState('AADHAR');
+  const [documentNumber, setDocumentNumber] = useState('');
+  const [documentImage, setDocumentImage] = useState<string | null>(null);
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Success state
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [successDoc, setSuccessDoc] = useState<KycDocument | null>(null);
+
+  const isVerified = existingDocs.some(d => d.status === 'verified');
+  const isPending = existingDocs.some(d => d.status === 'pending');
+
+  useEffect(() => {
+    const u = requireAuth();
+    if (!u) { navigate('/login'); return; }
+    setUser(u);
+    loadKycStatus(u.id);
+  }, []);
+
+  const loadKycStatus = async (userId: string) => {
+    try {
+      const res = await api.get('/kyc/my');
+      setExistingDocs(res.data.data || []);
+    } catch (err: any) {
+      // If the endpoint returns 403 or fails, just treat as no docs
+      console.error('Failed to load KYC status:', err);
+      setExistingDocs([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFileSelect = (file: File | null) => {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('File size must be less than 5MB.');
+      return;
+    }
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/jpg'].includes(file.type)) {
+      toast.error('Only JPG, PNG, and WebP images are accepted.');
+      return;
+    }
+    setDocumentFile(file);
+    const reader = new FileReader();
+    reader.onload = (e) => setDocumentImage(e.target?.result as string);
+    reader.readAsDataURL(file);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    handleFileSelect(e.dataTransfer.files[0]);
+  };
+
+  const handleSubmit = async () => {
+    if (!documentType || !documentNumber.trim()) {
+      toast.error('Please select document type and enter document number.');
+      return;
+    }
+    if (documentNumber.trim().length < 4) {
+      toast.error('Please enter a valid document number.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      // Use the data URL as the image URL if available
+      const imageUrl = documentImage || undefined;
+      const res = await api.post('/kyc/submit', {
+        documentType,
+        documentNumber: documentNumber.trim(),
+        documentImageUrl: imageUrl,
+      });
+      const newDoc = res.data.data;
+      toast.success('KYC submitted for admin review!');
+      setSuccessDoc(newDoc);
+      setShowSuccess(true);
+      setExistingDocs(prev => [...prev, newDoc]);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to submit KYC.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <AppLayout title="KYC Verification" subtitle="Loading...">
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="w-8 h-8 text-muted-foreground/30 animate-spin" />
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // ── Pending Approval Screen ────────────────────────────────────────────
+  if (showSuccess && successDoc) {
+    return (
+      <AppLayout title="KYC Verification" subtitle="Identity verification">
+        <div className="max-w-lg mx-auto">
+          <div className="bg-white border border-border rounded-3xl p-8 shadow-lg text-center animate-slide-up">
+            {/* Pending Animation */}
+            <div className="relative mb-6">
+              <div className="w-24 h-24 rounded-full bg-gradient-to-br from-yellow-400 to-amber-500 mx-auto flex items-center justify-center shadow-lg shadow-amber-200 animate-bounce">
+                <Clock className="w-12 h-12 text-white" />
+              </div>
+              <div className="absolute -top-2 -right-2 w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center animate-pulse">
+                <ShieldCheck className="w-5 h-5 text-blue-600" />
+              </div>
+            </div>
+
+            <h2 className="text-2xl font-heading font-bold text-foreground mb-2">
+              KYC Submitted for Review! 
+            </h2>
+            <p className="text-muted-foreground mb-6">
+              Your documents have been submitted successfully. An admin will review and verify your identity.
+              You'll see the update on your dashboard once approved.
+            </p>
+
+            {/* Document Summary */}
+            <div className="bg-amber-50 rounded-2xl p-4 mb-6 text-left">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center">
+                  <Fingerprint className="w-6 h-6 text-amber-600" />
+                </div>
+                <div>
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${DOCUMENT_TYPE_COLORS[successDoc.documentType] || 'bg-gray-100 text-gray-700'}`}>
+                    {successDoc.documentType}
+                  </span>
+                  <p className="font-mono font-bold text-foreground mt-0.5">{successDoc.documentNumber}</p>
+                </div>
+              </div>
+              <div className="mt-3 flex items-center gap-2 text-sm text-amber-700 bg-white/60 rounded-xl px-3 py-2">
+                <Clock className="w-4 h-4 shrink-0" />
+                <span>Awaiting admin verification</span>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="flex-1 gradient-primary text-white font-semibold py-3 rounded-xl hover:opacity-90 transition-opacity shadow-md"
+              >
+                Go to Dashboard
+              </button>
+              <button
+                onClick={() => { setShowSuccess(false); setSuccessDoc(null); setDocumentImage(null); setDocumentFile(null); setDocumentNumber(''); }}
+                className="flex-1 border border-border text-foreground font-semibold py-3 rounded-xl hover:bg-muted transition-colors"
+              >
+                Upload Another
+              </button>
+            </div>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // ── Already Verified Screen ─────────────────────────────────────────────
+  if (isVerified && existingDocs.length > 0) {
+    const verifiedDocs = existingDocs.filter(d => d.status === 'verified');
+    return (
+      <AppLayout title="KYC Verification" subtitle="Identity verification">
+        <div className="max-w-lg mx-auto">
+          <div className="bg-white border border-border rounded-3xl p-8 shadow-lg">
+            <div className="w-20 h-20 rounded-full bg-emerald-100 mx-auto flex items-center justify-center mb-4">
+              <ShieldCheck className="w-10 h-10 text-emerald-600" />
+            </div>
+            <h2 className="text-xl font-heading font-bold text-center text-foreground mb-1">
+              KYC Already Verified
+            </h2>
+            <p className="text-sm text-muted-foreground text-center mb-6">
+              Your identity has been verified. No further action needed.
+            </p>
+
+            <div className="space-y-3 mb-6">
+              {verifiedDocs.map(doc => (
+                <div key={doc.id} className="flex items-center gap-3 bg-muted/30 rounded-xl p-3">
+                  <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
+                    <FileText className="w-5 h-5 text-emerald-600" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${DOCUMENT_TYPE_COLORS[doc.documentType]}`}>
+                        {doc.documentType}
+                      </span>
+                      <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">Verified</span>
+                    </div>
+                    <p className="text-xs font-mono text-foreground mt-0.5">{doc.documentNumber}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Verified on {formatDate(doc.verifiedAt || doc.submittedAt)}</p>
+                  </div>
+                  <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="w-full gradient-primary text-white font-semibold py-3 rounded-xl hover:opacity-90 transition-opacity shadow-md"
+            >
+              Go to Dashboard
+            </button>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // ── Main Upload Form ────────────────────────────────────────────────────
+  return (
+    <AppLayout title="KYC Verification" subtitle="Verify your identity to unlock full banking access">
+      <div className="max-w-lg mx-auto space-y-5">
+        {/* Info Banner */}
+        <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 flex items-start gap-3">
+          <Fingerprint className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-indigo-800">Why KYC?</p>
+            <p className="text-xs text-indigo-700 mt-0.5">
+              Submit a valid government-issued ID to verify your identity.
+              Your document will be reviewed by an admin for approval.
+            </p>
+          </div>
+        </div>
+
+        {/* Pending KYC Warning */}
+        {isPending && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 flex items-start gap-3">
+            <Clock className="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-yellow-800">Previous Submission Pending</p>
+              <p className="text-xs text-yellow-700 mt-0.5">
+                You have a KYC document awaiting admin review. You can upload a new document in the meantime.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Rejected KYC Warning */}
+        {existingDocs.some(d => d.status === 'rejected') && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3">
+            <XCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-red-800">KYC Document Rejected</p>
+              <p className="text-xs text-red-700 mt-0.5">
+                {existingDocs.find(d => d.status === 'rejected')?.remarks || 
+                  'Your previous KYC submission was rejected. Please upload a new document with correct information.'}
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="bg-white border border-border rounded-2xl p-6 shadow-sm">
+          <h3 className="font-heading font-semibold text-base text-foreground mb-5">
+            Upload Identity Document
+          </h3>
+
+          {/* Image Upload Area */}
+          <div className="mb-5">
+            <label className="text-xs font-semibold text-muted-foreground mb-2 block">
+              Document Image (JPG/PNG, max 5MB)
+            </label>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/jpg"
+              onChange={e => handleFileSelect(e.target.files?.[0] || null)}
+              className="hidden"
+            />
+
+            {documentImage ? (
+              <div className="relative rounded-xl overflow-hidden border-2 border-emerald-200 bg-emerald-50">
+                <img
+                  src={documentImage}
+                  alt="Document preview"
+                  className="w-full h-48 object-contain bg-white p-2"
+                />
+                <button
+                  onClick={() => { setDocumentImage(null); setDocumentFile(null); }}
+                  className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors shadow-md"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                <div className="absolute bottom-2 left-2 bg-green-600/90 text-white text-xs px-2 py-1 rounded-lg font-semibold backdrop-blur-sm">
+                  <CheckCircle2 className="w-3 h-3 inline mr-1" /> Uploaded
+                </div>
+              </div>
+            ) : (
+              <div
+                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
+                  dragOver
+                    ? 'border-indigo-400 bg-indigo-50'
+                    : 'border-border hover:border-indigo-300 hover:bg-muted/30'
+                }`}
+              >
+                <div className={`w-14 h-14 rounded-xl mx-auto mb-3 flex items-center justify-center transition-colors ${
+                  dragOver ? 'bg-indigo-100' : 'bg-muted'
+                }`}>
+                  {dragOver ? (
+                    <Camera className="w-7 h-7 text-indigo-500" />
+                  ) : (
+                    <Upload className="w-7 h-7 text-muted-foreground" />
+                  )}
+                </div>
+                <p className="text-sm font-semibold text-foreground mb-1">
+                  {dragOver ? 'Drop your file here' : 'Click to upload or drag & drop'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Supported formats: JPG, PNG, WebP (max 5MB)
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Document Type */}
+          <div className="mb-4">
+            <label className="text-xs font-semibold text-muted-foreground mb-2 block">
+              Document Type
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {DOCUMENT_TYPE_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setDocumentType(opt.value)}
+                  className={`px-3 py-2.5 rounded-xl text-xs font-bold border transition-all ${
+                    documentType === opt.value
+                      ? `${opt.color} ring-2 ring-offset-1 ring-indigo-300`
+                      : 'border-border text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Document Number */}
+          <div className="mb-6">
+            <label className="text-xs font-semibold text-muted-foreground mb-2 block">
+              Document Number
+            </label>
+            <input
+              value={documentNumber}
+              onChange={e => setDocumentNumber(e.target.value.toUpperCase())}
+              placeholder={`Enter your ${DOCUMENT_TYPE_OPTIONS.find(o => o.value === documentType)?.label || 'document'} number`}
+              className="w-full px-4 py-3 border border-border rounded-xl text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300 font-mono"
+            />
+          </div>
+
+          {/* Submit */}
+          <button
+            onClick={handleSubmit}
+            disabled={submitting || !documentNumber.trim()}
+            className="w-full flex items-center justify-center gap-2 gradient-primary text-white font-semibold py-3 rounded-xl hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-blue-500/20"
+          >
+            {submitting ? (
+              <>
+                <Loader2 className="w-5 h-5 animate-spin" />
+                Submitting...
+              </>
+            ) : (
+              <>
+                <ShieldCheck className="w-5 h-5" />
+                Submit & Verify KYC
+                <ArrowRight className="w-4 h-4" />
+              </>
+            )}
+          </button>
+
+          <p className="text-xs text-muted-foreground text-center mt-3">
+            By submitting, you confirm this is your genuine government-issued document.
+          </p>
+        </div>
+
+        {/* Previously Submitted Documents */}
+        {existingDocs.length > 0 && (
+          <div className="bg-white border border-border rounded-2xl p-5 shadow-sm">
+            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+              Previously Submitted ({existingDocs.length})
+            </h3>
+            <div className="space-y-2">
+              {existingDocs.map(doc => (
+                <div key={doc.id} className="flex items-center gap-3 bg-muted/30 rounded-xl p-3">
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                    doc.status === 'verified' ? 'bg-emerald-100' :
+                    doc.status === 'rejected' ? 'bg-red-100' : 'bg-yellow-100'
+                  }`}>
+                    <FileText className={`w-4 h-4 ${
+                      doc.status === 'verified' ? 'text-emerald-600' :
+                      doc.status === 'rejected' ? 'text-red-500' : 'text-yellow-600'
+                    }`} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${DOCUMENT_TYPE_COLORS[doc.documentType]}`}>
+                        {doc.documentType}
+                      </span>
+                      <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full ${
+                        doc.status === 'verified' ? 'bg-emerald-100 text-emerald-700' :
+                        doc.status === 'rejected' ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-700'
+                      }`}>{doc.status}</span>
+                    </div>
+                    <p className="text-xs font-mono text-foreground mt-0.5">{doc.documentNumber}</p>
+                    {doc.status === 'rejected' && doc.remarks && (
+                      <p className="text-xs text-red-600 mt-0.5">{doc.remarks}</p>
+                    )}
+                  </div>
+                  {doc.status === 'verified' && <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />}
+                  {doc.status === 'rejected' && <XCircle className="w-4 h-4 text-red-500 shrink-0" />}
+                  {doc.status === 'pending' && <Clock className="w-4 h-4 text-yellow-500 shrink-0" />}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </AppLayout>
+  );
+}

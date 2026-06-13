@@ -1,0 +1,4 @@
+com/neobank/gateway/security/JwtAuthGatewayFilter.class
+com/neobank/gateway/config/CorsConfig.class
+com/neobank/gateway/config/SecurityConfig.class
+com/neobank/gateway/GatewayApplication.class

@@ -1,0 +1,266 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import AppLayout from '@/components/layout/AppLayout';
+import AccountCard from '@/components/features/AccountCard';
+import StatCard from '@/components/features/StatCard';
+import TransactionRow from '@/components/features/TransactionRow';
+import RealTimeTracker from '@/components/features/RealTimeTracker';
+import { useServiceSync } from '@/hooks/useServiceSync';
+import { requireAuth } from '@/lib/auth';
+import { formatCurrency } from '@/lib/mockData';
+import type { User } from '@/types';
+import api from '@/services/api';
+import { ArrowLeftRight, TrendingUp, TrendingDown, Wallet, Plus, ArrowRight, Eye, EyeOff, RefreshCw, ShieldCheck, Clock, IdCard, Fingerprint } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+
+// Compute cash flow data from real transactions
+function computeCashFlowData(transactions: Transaction[]): { month: string; income: number; expense: number }[] {
+  const months: Record<string, { income: number; expense: number }> = {};
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = d.toLocaleString('en-US', { month: 'short' });
+    months[key] = { income: 0, expense: 0 };
+  }
+  transactions.forEach(tx => {
+    const date = tx.createdAt ? new Date(tx.createdAt) : new Date();
+    const key = date.toLocaleString('en-US', { month: 'short' });
+    if (months[key]) {
+      if (tx.type === 'credit') months[key].income += tx.amount;
+      else if (tx.type === 'debit') months[key].expense += tx.amount;
+    }
+  });
+  return Object.entries(months).map(([month, data]) => ({ month, ...data }));
+}
+
+export default function Dashboard() {
+  const navigate = useNavigate();
+  const [user, setUser] = useState<User | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<string | null>(null);
+  const [hideBalance, setHideBalance] = useState(false);
+  const [kycStatus, setKycStatus] = useState<'verified' | 'pending' | 'not_submitted'>('not_submitted');
+  const [kycLoading, setKycLoading] = useState(true);
+
+  // Fetch KYC status
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      try {
+        const res = await api.get('/kyc/status');
+        setKycStatus(res.data.data?.status || 'not_submitted');
+      } catch {
+        setKycStatus('not_submitted');
+      } finally {
+        setKycLoading(false);
+      }
+    })();
+  }, [user]);
+
+  // useServiceSync polls every 5s, syncs on window focus, and reacts to refreshKey changes
+  const { accounts, transactions, isSyncing } = useServiceSync(user);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const u = requireAuth();
+    if (!u) { navigate('/login'); return; }
+    setUser(u);
+    setLoading(false);
+  }, []);
+
+  // Use top 5 transactions for display
+  const recentTransactions = transactions.slice(0, 5);
+
+  const totalBalance = accounts.reduce((sum, a) => sum + a.balance, 0);
+  const totalIn = recentTransactions.filter(t => t.type === 'credit' && t.status === 'completed').reduce((s, t) => s + t.amount, 0);
+  const totalOut = recentTransactions.filter(t => t.type !== 'credit' && t.status === 'completed').reduce((s, t) => s + t.amount, 0);
+  const failed = recentTransactions.filter(t => t.status === 'failed').length;
+
+  const greeting = () => {
+    const h = new Date().getHours();
+    return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  };
+
+  if (loading) {
+    return (
+      <AppLayout title="Dashboard" subtitle="Loading your accounts...">
+        <div className="flex items-center justify-center h-64">
+          <RefreshCw className="w-8 h-8 text-muted-foreground/30 animate-spin" />
+        </div>
+      </AppLayout>
+    );
+  }
+
+  return (
+    <AppLayout
+      title={`${greeting()}, ${user?.name.split(' ')[0] || 'User'}`}
+      subtitle={`Last login: ${new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}`}
+    >
+      <div className="space-y-6">
+        {/* KYC Status Banner */}
+        {!kycLoading && kycStatus === 'verified' && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 flex items-center gap-3 animate-slide-up">
+            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
+              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-emerald-800">KYC Verified ✓</p>
+              <p className="text-xs text-emerald-700">Your identity has been verified. You have full access.</p>
+            </div>
+            <Fingerprint className="w-5 h-5 text-emerald-400" />
+          </div>
+        )}
+        {!kycLoading && kycStatus === 'pending' && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 flex items-center gap-3 animate-slide-up">
+            <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+              <Clock className="w-4 h-4 text-amber-600" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-800">KYC Pending Review</p>
+              <p className="text-xs text-amber-700">Your documents are being reviewed by an admin.</p>
+            </div>
+            <button
+              onClick={() => navigate('/kyc')}
+              className="text-xs font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              Check Status
+            </button>
+          </div>
+        )}
+        {!kycLoading && kycStatus === 'not_submitted' && (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-3 flex items-center gap-3 animate-slide-up">
+            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+              <IdCard className="w-4 h-4 text-blue-600" />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-blue-800">KYC Not Completed</p>
+              <p className="text-xs text-blue-700">Complete your KYC to unlock all banking features.</p>
+            </div>
+            <button
+              onClick={() => navigate('/kyc')}
+              className="text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              Complete KYC
+            </button>
+          </div>
+        )}
+
+        {/* Stats Row */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard title="Total Balance" value={hideBalance ? '••••••' : formatCurrency(totalBalance)} change="+2.4% this month" changeType="up" icon={Wallet} delay="stagger-1" />
+          <StatCard title="Money In" value={formatCurrency(totalIn)} change="This month" changeType="up" icon={TrendingUp} iconBg="gradient-success" delay="stagger-2" />
+          <StatCard title="Money Out" value={formatCurrency(totalOut)} change="This month" changeType="down" icon={TrendingDown} iconBg="gradient-warning" delay="stagger-3" />
+          <StatCard title="Failed Txns" value={String(failed)} change={failed > 0 ? 'Needs attention' : 'All clear'} changeType={failed > 0 ? 'down' : 'neutral'} icon={ArrowLeftRight} delay="stagger-4" />
+        </div>
+
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Accounts + Chart column */}
+          <div className="lg:col-span-2 space-y-5">
+            {/* Accounts */}
+            <div className="bg-white rounded-2xl border border-border p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-heading font-bold text-base text-foreground">My Accounts</h2>
+                <button onClick={() => setHideBalance(!hideBalance)} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                  {hideBalance ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+                  {hideBalance ? 'Show' : 'Hide'}
+                </button>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-3">
+                {accounts.map(acc => (
+                  <AccountCard
+                    key={acc.id}
+                    account={acc}
+                    selected={selectedAccount === acc.id}
+                    onClick={() => setSelectedAccount(acc.id)}
+                  />
+                ))}
+                {accounts.length === 0 && (
+                  <div className="col-span-2 text-center py-8 text-muted-foreground text-sm">No accounts found.</div>
+                )}
+              </div>
+            </div>
+
+            {/* Spending Chart */}
+            <div className="bg-white rounded-2xl border border-border p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-heading font-bold text-base text-foreground">Cash Flow</h2>
+                <span className="text-xs text-muted-foreground">Last 6 months</span>
+              </div>
+              <ResponsiveContainer width="100%" height={180}>
+                <AreaChart data={computeCashFlowData(recentTransactions)} margin={{ top: 4, right: 0, bottom: 0, left: 0 }}>
+                  <defs>
+                    <linearGradient id="incomeGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="#3B82F6" stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="expenseGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#F97316" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="#F97316" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false}                  tickFormatter={v => `₹${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip
+                    formatter={(val: number) => [`₹${val.toLocaleString('en-IN')}`, '']}
+                    contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 12 }}
+                  />
+                  <Area type="monotone" dataKey="income" stroke="#3B82F6" strokeWidth={2} fill="url(#incomeGrad)" name="Income" />
+                  <Area type="monotone" dataKey="expense" stroke="#F97316" strokeWidth={2} fill="url(#expenseGrad)" name="Expense" />
+                </AreaChart>
+              </ResponsiveContainer>
+              <div className="flex gap-4 mt-2 justify-end">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <div className="w-2.5 h-2.5 rounded-full bg-blue-500" /><span>Income</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <div className="w-2.5 h-2.5 rounded-full bg-orange-500" /><span>Expense</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column */}
+          <div className="space-y-5">
+            {/* Quick Actions */}
+            <div className="bg-white rounded-2xl border border-border p-5 shadow-sm">
+              <h2 className="font-heading font-bold text-base text-foreground mb-4">Quick Actions</h2>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { label: 'Transfer', icon: ArrowLeftRight, path: '/transfer', color: 'text-blue-600 bg-blue-50 hover:bg-blue-100' },
+                  { label: 'Add Beneficiary', icon: Plus, path: '/beneficiaries', color: 'text-green-600 bg-green-50 hover:bg-green-100' },
+                  { label: 'History', icon: TrendingUp, path: '/transactions', color: 'text-purple-600 bg-purple-50 hover:bg-purple-100' },
+                  { label: 'Analytics', icon: TrendingDown, path: '/analytics', color: 'text-orange-600 bg-orange-50 hover:bg-orange-100' },
+                ].map(({ label, icon: Icon, path, color }) => (
+                  <button
+                    key={label}
+                    onClick={() => navigate(path)}
+                    className={`flex flex-col items-center gap-2 p-4 rounded-xl text-xs font-semibold transition-colors ${color}`}
+                  >
+                    <Icon className="w-5 h-5" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Recent Transactions */}
+            <div className="bg-white rounded-2xl border border-border p-5 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-heading font-bold text-base text-foreground">Recent Activity</h2>
+                <button onClick={() => navigate('/transactions')} className="flex items-center gap-1 text-xs text-primary font-semibold hover:underline">
+                  View all <ArrowRight className="w-3 h-3" />
+                </button>
+              </div>
+              <div className="space-y-0 -mx-2">
+                {recentTransactions.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-6">No recent transactions</p>
+                ) : (
+                  recentTransactions.map(tx => <TransactionRow key={tx.id} transaction={tx} />)
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </AppLayout>
+  );
+}
