@@ -8,17 +8,60 @@
 
 ---
 
-## Quick Deploy (Vercel)
+## Quick Deploy (Frontend on Vercel + Backend on Railway)
+
+This is the recommended free setup: frontend on Vercel, backend + MySQL on Railway.
+
+### Step 1: Deploy Backend on Railway
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new)
+
+1. **Create a Railway account** at [railway.app](https://railway.app) (free tier requires no credit card)
+2. **Create a new project** → **Deploy from GitHub repo** → Connect your NeoBank repository
+3. **Add a MySQL database:**
+   - Click **New** → **Database** → **Add MySQL**
+   - Wait for it to provision (takes ~30 seconds)
+   - Railway auto-injects `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` into your backend service
+4. **Add the backend service:**
+   - Click **New** → **GitHub Repo** → Select your repo → Set root directory to `neobank-backend`
+   - Railway will auto-detect the `Dockerfile` and build the Spring Boot app
+   - **Set environment variables** in the backend service:
+     - `JWT_SECRET` — generate a secure random string (e.g. `openssl rand -hex 64`)
+     - `APP_CORS_ORIGINS` — set to `https://your-app.vercel.app` (your Vercel frontend URL)
+
+   > ⚠️ **Railway MySQL env var names**:
+   > Railway's MySQL plugin provides connection details as `MYSQL_URL`, `MYSQL_USER`, `MYSQL_PASSWORD`.
+   > Spring Boot expects `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`.
+   > You must **manually map** these in Railway's dashboard:
+   > - `SPRING_DATASOURCE_URL` → paste the value from Railway's `MYSQL_URL`
+   > - `SPRING_DATASOURCE_USERNAME` → paste the value from `MYSQL_USER`
+   > - `SPRING_DATASOURCE_PASSWORD` → paste the value from `MYSQL_PASSWORD`
+   >
+   > You can find these values in Railway Dashboard → MySQL plugin → **Variables** tab.
+
+5. Once deployed, Railway gives your backend a URL like `https://neobank-backend.up.railway.app`
+
+### Step 2: Deploy Frontend on Vercel
+
+1. **Push the Railway backend URL** as a Vercel environment variable:
+   - Go to your Vercel project → **Settings** → **Environment Variables**
+   - Add: `VITE_API_BASE_URL` = `https://neobank-backend.up.railway.app`
+   - **Redeploy** the frontend on Vercel
+2. Your frontend will now make API calls to the Railway backend instead of `/api`
+
+---
+
+## Vercel (Frontend Only)
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new)
 
 1. Connect your GitHub repository
 2. The `vercel.json` in the root handles SPA routing automatically
 3. **Set environment variable** in Vercel Dashboard:
-   - `VITE_API_BASE_URL` — your deployed backend URL (e.g. `https://api.your-domain.com`)
+   - `VITE_API_BASE_URL` — your deployed backend URL (e.g. `https://neobank-backend.up.railway.app`)
 4. Deploy — done!
 
-Vercel auto-detects the Vite framework and uses the `vercel.json` rewrites for SPA fallback.
+> ⚠️ **Without setting `VITE_API_BASE_URL`, API calls go to `/api` on Vercel's domain, which won't work unless you have a backend there.**
 
 ---
 
@@ -129,9 +172,22 @@ The `static.json` file handles SPA routing and HTTPS.
 
 ## Environment Variables
 
+### Frontend (Vite)
+
 | Variable | Required | Description | Example |
 |---|---|---|---|
-| `VITE_API_BASE_URL` | Yes (prod) | Backend API server URL | `https://api.your-domain.com` |
+| `VITE_API_BASE_URL` | Yes (prod) | Backend API server URL | `https://neobank-backend.up.railway.app` |
+
+### Backend (Spring Boot)
+
+| Variable | Required | Description | Example |
+|---|---|---|---|
+| `SPRING_DATASOURCE_URL` | Yes | MySQL JDBC URL | `jdbc:mysql://...` |
+| `SPRING_DATASOURCE_USERNAME` | Yes | MySQL username | `root` |
+| `SPRING_DATASOURCE_PASSWORD` | Yes | MySQL password | |
+| `JWT_SECRET` | Yes | JWT signing secret (256-bit) | `openssl rand -hex 64` |
+| `APP_CORS_ORIGINS` | Yes | Comma-separated allowed CORS origins | `https://neobank.vercel.app` |
+| `SERVER_PORT` | No | Server port (default: 8080) | `8080` |
 
 > **Note:** In development, `VITE_API_BASE_URL` is optional — the Vite dev server proxies `/api` → `localhost:8080`.
 
@@ -150,7 +206,7 @@ The `static.json` file handles SPA routing and HTTPS.
 ### API calls failing
 1. Ensure `VITE_API_BASE_URL` is set correctly in your hosting platform
 2. Verify the backend server is running and accessible
-3. Check CORS configuration on the backend to allow your frontend domain
+3. Check CORS configuration on the backend to allow your frontend domain (set `APP_CORS_ORIGINS`)
 
 ### Build failing
 1. Run `npm run build` locally first to verify
