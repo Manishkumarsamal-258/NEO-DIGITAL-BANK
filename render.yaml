@@ -1,0 +1,37 @@
+# ── NeoBank Backend — Render Blueprint ─────────────────────
+# Deploys the Spring Boot backend via Docker.
+#
+# Steps:
+#   1. Push this repo to GitHub
+#   2. In Render Dashboard → Blueprint → Connect your GitHub repo
+#   3. Set the required env vars (see below)
+#   4. Deploy — Render auto-detects the Dockerfile in neobank-backend/
+#
+# Required environment variables (set in Render Dashboard):
+#   SPRING_DATASOURCE_URL      JDBC URL for TiDB Cloud (or your MySQL)
+#   SPRING_DATASOURCE_USERNAME MySQL username
+#   SPRING_DATASOURCE_PASSWORD MySQL password
+#   JWT_SECRET                 Secure random string (openssl rand -hex 64)
+#   APP_CORS_ORIGINS           Your Vercel frontend URL
+#
+# Note: Render free tier web services sleep after 15 min of inactivity.
+#       They auto-wake on the next request (~30s cold start).
+
+services:
+  - type: web
+    name: neobank-backend
+    dockerfilePath: ./neobank-backend/Dockerfile
+    healthCheckPath: /actuator/health
+    envVars:
+      - key: SERVER_PORT
+        value: 8080
+      - key: SPRING_DATASOURCE_URL
+        sync: false  # Set manually in Dashboard
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: APP_CORS_ORIGINS
+        sync: false  # Set to your Vercel frontend URL

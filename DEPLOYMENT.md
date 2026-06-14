@@ -8,46 +8,107 @@
 
 ---
 
-## Quick Deploy (Frontend on Vercel + Backend on Railway)
+## 🚀 Quickest Option: Vercel Only (Demo Mode — No Backend Needed)
 
-This is the recommended free setup: frontend on Vercel, backend + MySQL on Railway.
+**No backend, no database, no credit card required.** Set `VITE_DEMO_MODE=true` and your app works entirely in the browser using localStorage mock data.
 
-### Step 1: Deploy Backend on Railway
+### How it works
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new)
+1. **In your Vercel project** → **Settings** → **Environment Variables** → Add:
+   - `VITE_DEMO_MODE` = `true`
+2. **Redeploy** your frontend on Vercel
+3. ✅ **Done!** The app now works fully without any backend.
 
-1. **Create a Railway account** at [railway.app](https://railway.app) (free tier requires no credit card)
-2. **Create a new project** → **Deploy from GitHub repo** → Connect your NeoBank repository
-3. **Add a MySQL database:**
-   - Click **New** → **Database** → **Add MySQL**
-   - Wait for it to provision (takes ~30 seconds)
-   - Railway auto-injects `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD` into your backend service
-4. **Add the backend service:**
-   - Click **New** → **GitHub Repo** → Select your repo → Set root directory to `neobank-backend`
-   - Railway will auto-detect the `Dockerfile` and build the Spring Boot app
-   - **Set environment variables** in the backend service:
-     - `JWT_SECRET` — generate a secure random string (e.g. `openssl rand -hex 64`)
-     - `APP_CORS_ORIGINS` — set to `https://your-app.vercel.app` (your Vercel frontend URL)
+### Demo Login Credentials
 
-   > ⚠️ **Railway MySQL env var names**:
-   > Railway's MySQL plugin provides connection details as `MYSQL_URL`, `MYSQL_USER`, `MYSQL_PASSWORD`.
-   > Spring Boot expects `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`.
-   > You must **manually map** these in Railway's dashboard:
-   > - `SPRING_DATASOURCE_URL` → paste the value from Railway's `MYSQL_URL`
-   > - `SPRING_DATASOURCE_USERNAME` → paste the value from `MYSQL_USER`
-   > - `SPRING_DATASOURCE_PASSWORD` → paste the value from `MYSQL_PASSWORD`
-   >
-   > You can find these values in Railway Dashboard → MySQL plugin → **Variables** tab.
+| Role | Email | Password |
+|---|---|---|
+| Customer | `alice@neobank.com` | `password123` |
+| Customer | `bob@neobank.com` | `password123` |
+| Teller | `teller@neobank.com` | `teller123` |
+| Admin | `admin@neobank.com` | `admin123` |
 
-5. Once deployed, Railway gives your backend a URL like `https://neobank-backend.up.railway.app`
+### What works in demo mode
 
-### Step 2: Deploy Frontend on Vercel
+- ✅ Login / Register / Profile management
+- ✅ View accounts, balances, transactions
+- ✅ Transfer money between accounts
+- ✅ Deposit / Withdraw
+- ✅ Beneficiary management (add, edit, delete)
+- ✅ KYC document upload
+- ✅ Admin panel (users, accounts, KYC verification)
+- ✅ Teller operations (customer management, account creation)
+- ✅ All data persists in browser localStorage
 
-1. **Push the Railway backend URL** as a Vercel environment variable:
-   - Go to your Vercel project → **Settings** → **Environment Variables**
-   - Add: `VITE_API_BASE_URL` = `https://neobank-backend.up.railway.app`
-   - **Redeploy** the frontend on Vercel
-2. Your frontend will now make API calls to the Railway backend instead of `/api`
+> ⚠️ **Data is stored in your browser's localStorage.** Clearing browser data will reset everything to the defaults. All data is local to each device.
+
+---
+
+## Full Stack: Frontend on Vercel + Backend on Render + TiDB Cloud MySQL
+
+For a production-ready setup with a real backend and database:
+
+### Step 1: Create Free MySQL Database (TiDB Cloud)
+
+[![TiDB Cloud Free Tier](https://img.shields.io/badge/TiDB_Cloud-Free_tier-blue)](https://tidbcloud.com/signup)
+
+1. **Sign up** at [tidbcloud.com](https://tidbcloud.com/signup) — no credit card required
+2. **Create a Serverless Tier cluster:**
+   - Click **Create Cluster** → Select **Serverless Tier** (free)
+   - Choose any region close to you
+   - Click **Create** (takes ~30-60 seconds to provision)
+3. **Get connection details:**
+   - Click **Connect** on your cluster
+   - Select **General** tab → copy the connection string
+   - Save these values:
+     - `Host` (looks like `gateway01.us-east-xxx.prod.aws.tidbcloud.com`)
+     - `Port` (usually `4000`)
+     - `Username` (looks like `xxxxx.root`)
+     - `Password`
+     - `Database` (default: `test`, you can create a new one)
+4. Your JDBC URL will be:
+   ```
+   jdbc:mysql://<HOST>:4000/<DB>?sslMode=VERIFY_IDENTITY&enabledTLSProtocols=TLSv1.2,TLSv1.3
+   ```
+
+> 💡 **TiDB Cloud Networking:** If you encounter connection issues, go to **TiDB Cloud Console → your cluster → Networking** and ensure **"Allow Access from Anywhere"** is enabled.
+
+---
+
+### Step 2: Deploy Backend on Render
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
+
+1. **Sign up** at [render.com](https://render.com) — no credit card required
+2. **Create a new Web Service:**
+   - Click **New +** → **Web Service**
+   - Connect your GitHub repository
+   - Choose the `neobank-backend` directory (or select the whole repo and set **Root Directory** to `neobank-backend`)
+   - **Runtime:** Select **Docker** (Render auto-detects the `Dockerfile`)
+   - **Name:** `neobank-backend`
+3. **Set environment variables:**
+
+   | Variable | Value |
+   |---|---|
+   | `SPRING_DATASOURCE_URL` | JDBC URL from TiDB Cloud |
+   | `SPRING_DATASOURCE_USERNAME` | Your TiDB Cloud username |
+   | `SPRING_DATASOURCE_PASSWORD` | Your TiDB Cloud password |
+   | `JWT_SECRET` | Run `openssl rand -hex 64` to generate |
+   | `APP_CORS_ORIGINS` | `https://your-app.vercel.app` |
+
+4. **Deploy:** Click **Create Web Service** (builds via Docker, takes ~5-10 min)
+
+> ⚠️ **Note:** Render's free tier web services **sleep after 15 minutes of inactivity**. They auto-wake on the next request (~30s cold start).
+
+---
+
+### Step 3: Connect Frontend on Vercel
+
+1. Go to your **Vercel project** → **Settings** → **Environment Variables**
+2. Add:
+   - `VITE_API_BASE_URL` = `https://neobank-backend.onrender.com`
+   - Remove `VITE_DEMO_MODE` (or set to `false`)
+3. **Redeploy** on Vercel
 
 ---
 
