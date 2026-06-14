@@ -18,7 +18,10 @@ import axios from 'axios';
  *   - Login with seed credentials: alice@neobank.com / password123, admin@neobank.com / admin123
  */
 const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+// When VITE_API_BASE_URL is set (production), append /api to match backend controller paths.
+// In development without VITE_API_BASE_URL, the Vite proxy handles /api → localhost:8080.
+const VITE_API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+const API_BASE_URL = VITE_API_BASE_URL ? `${VITE_API_BASE_URL.replace(/\/$/, '')}/api` : '/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
