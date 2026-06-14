@@ -1,6 +1,6 @@
 package com.neobank.controller;
 
-import com.neobank.dto.ApiResponse;
+import com.neobank.dto.*;
 import com.neobank.model.KycDocument;
 import com.neobank.model.User;
 import com.neobank.model.Account;
@@ -65,6 +65,45 @@ public class AdminController {
     }
 
     // ── KYC Endpoints ──────────────────────────────────────────────────────
+
+    // ── Admin CRUD: Users ─────────────────────────────────────────────────
+
+    @PostMapping("/users")
+    public ResponseEntity<ApiResponse<User>> createUser(@RequestBody AdminUserRequest request) {
+        try {
+            User user = userService.createUser(request);
+            return ResponseEntity.ok(ApiResponse.<User>builder()
+                    .success(true).message("User created successfully.").data(user).build());
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.<User>builder()
+                    .success(false).message(e.getMessage()).build());
+        }
+    }
+
+    @PutMapping("/users/{id}")
+    public ResponseEntity<ApiResponse<User>> updateUser(@PathVariable String id,
+                                                         @RequestBody AdminUserRequest request) {
+        try {
+            User user = userService.updateUser(id, request);
+            return ResponseEntity.ok(ApiResponse.<User>builder()
+                    .success(true).message("User updated successfully.").data(user).build());
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.<User>builder()
+                    .success(false).message(e.getMessage()).build());
+        }
+    }
+
+    @DeleteMapping("/users/{id}")
+    public ResponseEntity<ApiResponse<Void>> deleteUser(@PathVariable String id) {
+        try {
+            userService.deleteUser(id);
+            return ResponseEntity.ok(ApiResponse.<Void>builder()
+                    .success(true).message("User deleted successfully.").build());
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(ApiResponse.<Void>builder()
+                    .success(false).message(e.getMessage()).build());
+        }
+    }
 
     @GetMapping("/kyc")
     public ResponseEntity<ApiResponse<List<KycDocument>>> getAllKyc() {

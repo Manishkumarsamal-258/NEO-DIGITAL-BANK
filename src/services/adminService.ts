@@ -26,6 +26,38 @@ export async function toggleUserStatus(userId: string): Promise<User> {
   return response.data.data;
 }
 
+// ── Admin CRUD: Users ──────────────────────────────────────────────────────
+
+export async function createUser(data: {
+  name: string;
+  email: string;
+  password: string;
+  phone: string;
+  address: string;
+  role: string;
+  status: string;
+}): Promise<User> {
+  const response = await api.post('/admin/users', data);
+  return response.data.data;
+}
+
+export async function updateUser(userId: string, data: {
+  name?: string;
+  email?: string;
+  password?: string;
+  phone?: string;
+  address?: string;
+  role?: string;
+  status?: string;
+}): Promise<User> {
+  const response = await api.put(`/admin/users/${userId}`, data);
+  return response.data.data;
+}
+
+export async function deleteUser(userId: string): Promise<void> {
+  await api.delete(`/admin/users/${userId}`);
+}
+
 // ── KYC API ──────────────────────────────────────────────────────────────────
 
 export async function getAllKyc(): Promise<KycDocument[]> {

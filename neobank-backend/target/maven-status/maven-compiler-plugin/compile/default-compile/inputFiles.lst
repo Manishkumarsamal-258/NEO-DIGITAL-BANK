@@ -10,6 +10,7 @@
 /Users/manishkumarsamal/Downloads/NeoBank-main/neobank-backend/src/main/java/com/neobank/controller/TellerController.java
 /Users/manishkumarsamal/Downloads/NeoBank-main/neobank-backend/src/main/java/com/neobank/controller/TransactionController.java
 /Users/manishkumarsamal/Downloads/NeoBank-main/neobank-backend/src/main/java/com/neobank/controller/UserController.java
+/Users/manishkumarsamal/Downloads/NeoBank-main/neobank-backend/src/main/java/com/neobank/dto/AdminUserRequest.java
 /Users/manishkumarsamal/Downloads/NeoBank-main/neobank-backend/src/main/java/com/neobank/dto/ApiResponse.java
 /Users/manishkumarsamal/Downloads/NeoBank-main/neobank-backend/src/main/java/com/neobank/dto/ChangePasswordRequest.java
 /Users/manishkumarsamal/Downloads/NeoBank-main/neobank-backend/src/main/java/com/neobank/dto/CreateAccountRequest.java

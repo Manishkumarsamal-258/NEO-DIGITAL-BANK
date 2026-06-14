@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import ThemeToggle from '@/components/ui/ThemeToggle';
 import { requireAuth } from '@/lib/auth';
 import type { User } from '@/types';
-import { Menu, Bell, Search } from 'lucide-react';
+import { Menu, Bell, Search, Sparkles } from 'lucide-react';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -58,10 +59,19 @@ export default function AppLayout({ children, title, subtitle }: AppLayoutProps)
 
           <div className="min-w-0">
             {title && <h1 className="font-heading font-bold text-lg text-foreground truncate">{title}</h1>}
-            {subtitle && <p className="text-xs text-muted-foreground truncate">{subtitle}</p>}
+            {subtitle && (
+              <div className="flex items-center gap-1.5">
+                <Sparkles className="w-3 h-3 text-blue-500" />
+                <p className="text-xs text-muted-foreground truncate">{subtitle}</p>
+              </div>
+            )}
+            <p className="text-[10px] text-blue-500/70 font-medium tracking-wide mt-0.5">
+              NeoBank Digital Banking · Developed by Manish Kumar Samal
+            </p>
           </div>
 
           <div className="ml-auto flex items-center gap-2">
+            <ThemeToggle />
             <div className="hidden md:flex items-center gap-2 bg-muted rounded-lg px-3 py-2 w-48">
               <Search className="w-4 h-4 text-muted-foreground shrink-0" />
               <input
@@ -73,7 +83,7 @@ export default function AppLayout({ children, title, subtitle }: AppLayoutProps)
               <Bell className="w-5 h-5 text-foreground" />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-primary rounded-full" />
             </button>
-            <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-white text-xs font-bold cursor-pointer">
+            <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-white text-xs font-bold cursor-pointer hover:shadow-lg hover:shadow-primary/20 transition-all">
               {user.avatarInitials}
             </div>
           </div>

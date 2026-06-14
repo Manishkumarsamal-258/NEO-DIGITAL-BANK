@@ -7,7 +7,7 @@
 set -e
 
 echo "╔════════════════════════════════════════════╗"
-echo "║        🏦 NeoBank Startup Script          ║"
+echo "║ 🏦 NeoBank-Developed By Manish Kumar Samal  ║"
 echo "╚════════════════════════════════════════════╝"
 
 # ── 1. Check MySQL is running ──────────────────────────────

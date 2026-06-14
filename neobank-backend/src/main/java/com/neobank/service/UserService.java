@@ -104,6 +104,72 @@ public class UserService {
         return userRepository.save(user);
     }
 
+    // ── Admin CRUD ──────────────────────────────────────────────────────────
+
+    public User createUser(AdminUserRequest request) {
+        if (userRepository.existsByEmailIgnoreCase(request.getEmail())) {
+            throw new RuntimeException("A user with this email already exists.");
+        }
+
+        String initials = Arrays.stream(request.getName().split(" "))
+                .map(n -> n.substring(0, 1).toUpperCase())
+                .collect(Collectors.joining())
+            .substring(0, Math.min(2, request.getName().split(" ").length));
+
+        User.UserRole role = User.UserRole.customer;
+        if (request.getRole() != null) {
+            role = User.UserRole.valueOf(request.getRole());
+        }
+
+        User.UserStatus status = User.UserStatus.active;
+        if (request.getStatus() != null) {
+            status = User.UserStatus.valueOf(request.getStatus());
+        }
+
+        User user = User.builder()
+                .name(request.getName())
+                .email(request.getEmail().toLowerCase())
+                .password(passwordEncoder.encode(request.getPassword() != null ? request.getPassword() : "NeoBank@123"))
+                .role(role)
+                .phone(request.getPhone() != null ? request.getPhone() : "")
+                .address(request.getAddress() != null ? request.getAddress() : "")
+                .createdAt(LocalDate.now())
+                .status(status)
+                .avatarInitials(initials)
+                .build();
+
+        return userRepository.save(user);
+    }
+
+    public User updateUser(String userId, AdminUserRequest request) {
+        User user = getUserById(userId);
+
+        if (request.getName() != null) user.setName(request.getName());
+        if (request.getPhone() != null) user.setPhone(request.getPhone());
+        if (request.getAddress() != null) user.setAddress(request.getAddress());
+        if (request.getRole() != null) user.setRole(User.UserRole.valueOf(request.getRole()));
+        if (request.getStatus() != null) user.setStatus(User.UserStatus.valueOf(request.getStatus()));
+        if (request.getEmail() != null) {
+            if (!request.getEmail().equalsIgnoreCase(user.getEmail()) && userRepository.existsByEmailIgnoreCase(request.getEmail())) {
+                throw new RuntimeException("A user with this email already exists.");
+            }
+            user.setEmail(request.getEmail().toLowerCase());
+        }
+        if (request.getPassword() != null && !request.getPassword().isEmpty()) {
+            user.setPassword(passwordEncoder.encode(request.getPassword()));
+        }
+
+        return userRepository.save(user);
+    }
+
+    public void deleteUser(String userId) {
+        User user = getUserById(userId);
+        if (user.getRole() == User.UserRole.admin) {
+            throw new RuntimeException("Cannot delete admin users.");
+        }
+        userRepository.delete(user);
+    }
+
     private LoginResponse toLoginResponse(User user, String token) {
         return LoginResponse.builder()
                 .token(token)

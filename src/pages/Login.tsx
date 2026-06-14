@@ -69,8 +69,8 @@ export default function Login() {
                 { label: 'Active Users', value: '2.4M+' },
                 { label: 'Daily Transfers', value: '₹840M' },
                 { label: 'Uptime', value: '99.99%' },
-              ].map(stat => (
-                <div key={stat.label} className="bg-white/8 backdrop-blur-sm rounded-xl p-4 border border-white/10">
+              ].map((stat, i) => (
+                <div key={stat.label} className={`bg-white/8 backdrop-blur-sm rounded-xl p-4 border border-white/10 animate-slide-up stagger-${i + 1}`}>
                   <p className="text-white font-heading font-bold text-xl">{stat.value}</p>
                   <p className="text-white/50 text-xs mt-1">{stat.label}</p>
                 </div>
@@ -95,7 +95,7 @@ export default function Login() {
             <span className="font-heading font-bold text-xl">NeoBank</span>
           </div>
 
-          <div className="mb-8">
+          <div className="mb-8 animate-slide-left stagger-2">
             <h1 className="font-heading font-bold text-2xl text-foreground mb-1">Sign in to your account</h1>
             <p className="text-muted-foreground text-sm">Enter your credentials to access online banking.</p>
           </div>

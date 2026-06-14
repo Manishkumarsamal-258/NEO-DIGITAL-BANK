@@ -4,6 +4,7 @@ com/neobank/service/KycService$StatusCount.class
 com/neobank/model/User$UserRole.class
 com/neobank/model/Account$AccountStatus.class
 com/neobank/model/Transaction$Builder.class
+com/neobank/dto/AdminUserRequest.class
 com/neobank/service/BeneficiaryService.class
 com/neobank/service/AccountService.class
 com/neobank/repository/BeneficiaryRepository.class
