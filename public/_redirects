@@ -1,0 +1,3 @@
+# Netlify SPA fallback — all routes serve index.html
+# This enables client-side routing (BrowserRouter) to work on deployment.
+/*    /index.html    200

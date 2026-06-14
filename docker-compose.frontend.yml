@@ -1,0 +1,18 @@
+# ── NeoBank Frontend-Only Docker Compose ───────────────────
+# Runs only the frontend SPA with Nginx (no backend, no database).
+# Useful when you have a separately hosted backend API.
+#
+# Usage:
+#   docker compose -f docker-compose.frontend.yml up -d
+#   docker compose -f docker-compose.frontend.yml down
+
+services:
+  frontend:
+    build:
+      context: .
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-https://api.your-domain.com}
+    image: neobank-frontend:latest
+    ports:
+      - "${PORT:-3000}:80"
+    restart: unless-stopped
