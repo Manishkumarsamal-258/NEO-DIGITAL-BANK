@@ -68,32 +68,68 @@ public class TransactionService {
             beneficiaryName = ben.getName();
         } else if (request.getToAccountNumber() != null && !request.getToAccountNumber().isEmpty()) {
             targetAccountNumber = request.getToAccountNumber();
-            beneficiaryName = request.getToAccountNumber();
         } else {
             throw new RuntimeException("No target account specified.");
         }
 
+        // ── Look up the destination account by account number ────────────────
+        Account toAccount = accountRepository.findByAccountNumber(targetAccountNumber)
+                .orElseThrow(() -> new RuntimeException("Destination account not found"));
+
+        if (toAccount.getStatus() != Account.AccountStatus.active) {
+            throw new RuntimeException("Destination account is not active.");
+        }
+
+        // ── Update both balances ────────────────────────────────────────────
         fromAccount.setBalance(fromAccount.getBalance() - request.getAmount());
         accountRepository.save(fromAccount);
 
-        String ref = "TXN" + System.currentTimeMillis() + UUID.randomUUID().toString().substring(0, 4);
+        toAccount.setBalance(toAccount.getBalance() + request.getAmount());
+        accountRepository.save(toAccount);
 
-        Transaction tx = Transaction.builder()
+        // Resolve display name: beneficiary name if available, otherwise account number
+        String toUserName = beneficiaryName != null ? beneficiaryName : targetAccountNumber;
+
+        String ref = "TXN" + System.currentTimeMillis() + UUID.randomUUID().toString().substring(0, 4);
+        Instant now = Instant.now();
+
+        // ── Sender transaction (outgoing transfer) ───────────────────────────
+        Transaction senderTx = Transaction.builder()
                 .fromAccountId(request.getFromAccountId())
-                .toAccountId(targetAccountNumber)
+                .toAccountId(toAccount.getId())
                 .userId(userId)
                 .type(Transaction.TransactionType.transfer)
                 .amount(request.getAmount())
                 .currency("INR")
                 .description(request.getDescription() != null ? request.getDescription() : "Fund transfer")
                 .status(Transaction.TransactionStatus.completed)
-                .reference(ref)
-                .createdAt(Instant.now())
-                .beneficiaryName(beneficiaryName)
+                .reference(ref + "-OUT")
+                .createdAt(now)
+                .beneficiaryName(toUserName)
                 .category("Transfer")
                 .build();
 
-        return transactionRepository.save(tx);
+        transactionRepository.save(senderTx);
+
+        // ── Receiver transaction (incoming credit) ───────────────────────────
+        Transaction receiverTx = Transaction.builder()
+                .fromAccountId(request.getFromAccountId())
+                .toAccountId(toAccount.getId())
+                .userId(toAccount.getUserId())
+                .type(Transaction.TransactionType.credit)
+                .amount(request.getAmount())
+                .currency("INR")
+                .description(request.getDescription() != null ? request.getDescription() : "Transfer received")
+                .status(Transaction.TransactionStatus.completed)
+                .reference(ref + "-IN")
+                .createdAt(now)
+                .beneficiaryName(fromAccount.getAccountNumber())
+                .category("Transfer")
+                .build();
+
+        transactionRepository.save(receiverTx);
+
+        return senderTx;
     }
 
     @Transactional

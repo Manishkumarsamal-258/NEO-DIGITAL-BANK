@@ -87,6 +87,7 @@ export async function register(data: {
 export function logout(): void {
   localStorage.removeItem('neobank_token');
   localStorage.removeItem('neobank_user');
+  localStorage.removeItem('neobank_current_user');
 }
 
 export function getAuth(): { user: User | null; isAuthenticated: boolean } {

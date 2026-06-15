@@ -6,6 +6,7 @@ import { getCustomers } from '@/services/tellerService';
 import { getCustomerAccounts, createAccount, deposit, withdraw, toggleFreeze } from '@/services/tellerService';
 import { formatCurrency } from '@/lib/mockData';
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
+import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import type { User, Account } from '@/types';
 import { Plus, Search, Banknote, UserPlus, X, CheckCircle2, ArrowDownLeft, ArrowUpRight, RefreshCw, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -23,6 +24,7 @@ export default function TellerCenter() {
   const [newAccType, setNewAccType] = useState<'savings' | 'checking' | 'fixed_deposit'>('savings');
   const [newAccInitial, setNewAccInitial] = useState('');
   const [loading, setLoading] = useState(true);
+  const { triggerRefresh } = useDataRefresh();
 
   // Also refresh selected customer accounts when data refreshes
   useEffect(() => {
@@ -96,7 +98,10 @@ export default function TellerCenter() {
         setAllAccounts(prev => [...prev, result.account!]);
         setShowNewAccount(false);
         setNewAccInitial('');
-        toast.success(`${newAccType.replace('_', ' ')} account created for ${selectedCustomer.name}.`);
+        triggerRefresh();
+        toast.success(`${newAccType.replace('_', ' ')} account created for ${selectedCustomer.name}.`, {
+          description: `Account number: ${result.account.accountNumber}`,
+        });
       } else {
         toast.error(result.error || 'Failed to create account.');
       }
@@ -120,6 +125,7 @@ export default function TellerCenter() {
         setShowTransaction(null);
         setTxAmount('');
         setTxDesc('');
+        triggerRefresh();
         toast.success(`${type === 'deposit' ? 'Deposited' : 'Withdrew'} ${formatCurrency(amt)} ${type === 'deposit' ? 'to' : 'from'} ${selectedCustomer.name}'s account.`);
       } else {
         toast.error(result.error || 'Transaction failed.');
@@ -135,6 +141,7 @@ export default function TellerCenter() {
       setAllAccounts(prev => prev.map(a =>
         a.id === acc.id ? { ...a, status: a.status === 'active' ? 'frozen' as const : 'active' as const } : a
       ));
+      triggerRefresh();
       toast.success(`Account ${acc.status === 'active' ? 'frozen' : 'unfrozen'}.`);
     } else {
       toast.error(result.error || 'Failed to update account status.');

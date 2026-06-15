@@ -56,7 +56,9 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 || error.response?.status === 403) {
+    // 401 = Unauthenticated (token missing/invalid/expired) → log out & redirect
+    // 403 = Forbidden (authenticated but not authorized) → do NOT log out, just pass error through
+    if (error.response?.status === 401) {
       localStorage.removeItem('neobank_token');
       localStorage.removeItem('neobank_user');
       if (window.location.pathname !== '/login') {
@@ -66,5 +68,33 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+/**
+ * Public API instance — same base URL, same mock adapter, same request interceptor,
+ * but WITHOUT the auth redirect response interceptor.
+ *
+ * Use this ONLY for endpoints that should NEVER redirect to login on error
+ * (e.g. account lookup, public health checks).
+ * 403 errors from this instance are returned as normal promise rejections.
+ */
+export const publicApi = axios.create({
+  baseURL: API_BASE_URL,
+  headers: { 'Content-Type': 'application/json' },
+});
+
+if (DEMO_MODE) {
+  publicApi.defaults.adapter = mockAdapter;
+}
+
+// Attach JWT token (same as api instance)
+publicApi.interceptors.request.use((config) => {
+  const token = localStorage.getItem('neobank_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// NO response interceptor — no redirect to login regardless of error
 
 export default api;

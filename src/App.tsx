@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { DataRefreshProvider } from "./contexts/DataRefreshContext";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
@@ -22,6 +22,7 @@ import Withdraw from "./pages/Withdraw";
 import MyAccounts from "./pages/MyAccounts";
 import Statements from "./pages/Statements";
 import Loans from "./pages/Loans";
+import Index from "./pages/Index";
 
 const queryClient = new QueryClient();
 
@@ -33,7 +34,7 @@ const App = () => (
       <BrowserRouter>
         <DataRefreshProvider>
         <Routes>
-          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/" element={<Index />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/dashboard" element={<Dashboard />} />

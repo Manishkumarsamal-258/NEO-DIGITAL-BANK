@@ -4,11 +4,13 @@ import { requireAuth } from '@/lib/auth';
 import {
   getAllUsers, toggleUserStatus, getAllTransactions, getAllAccounts,
   getAllKyc, getPendingKyc, verifyKyc, rejectKyc, getKycStats,
-  createUser, updateUser, deleteUser
+  createUser, updateUser, deleteUser,
+  adminCreateBeneficiary, getBeneficiariesByUser
 } from '@/services/adminService';
+import { deleteBeneficiary } from '@/services/beneficiaryService';
 import { formatCurrency, formatDate } from '@/lib/mockData';
 import { useRealtimeRefresh } from '@/hooks/useRealtimeRefresh';
-import type { User, Transaction, Account, KycDocument } from '@/types';
+import type { User, Transaction, Account, Beneficiary, KycDocument } from '@/types';
 import {
   Users, AlertTriangle, ShieldCheck, Activity, Search,
   CheckCircle2, XCircle, Ban, RefreshCw, Eye, Loader2,
@@ -61,6 +63,12 @@ export default function AdminConsole() {
   const [rejectModal, setRejectModal] = useState<KycDocument | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // Beneficiary state (for user detail modal)
+  const [selectedUserBeneficiaries, setSelectedUserBeneficiaries] = useState<Beneficiary[]>([]);
+  const [showAddBeneficiary, setShowAddBeneficiary] = useState(false);
+  const [beneficiaryForm, setBeneficiaryForm] = useState({ name: '', accountNumber: '', bankName: 'NeoBank', ifscCode: '', nickname: '' });
+  const [beneficiaryDeleteConfirm, setBeneficiaryDeleteConfirm] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -236,6 +244,7 @@ export default function AdminConsole() {
     try {
       const updated = await rejectKyc(rejectModal.id, rejectReason);
       setKycDocs(prev => prev.map(d => d.id === rejectModal.id ? updated : d));
+      setKycDocToReview(null);
       setRejectModal(null);
       setRejectReason('');
       // Refresh stats
@@ -246,6 +255,61 @@ export default function AdminConsole() {
       toast.error(err?.response?.data?.message || 'Failed to reject KYC.');
     } finally {
       setActionLoading(null);
+    }
+  };
+
+  // ── Beneficiary Handlers ────────────────────────────────────────────────
+
+  // Load beneficiaries when user detail modal opens
+  useEffect(() => {
+    if (selectedUser) {
+      getBeneficiariesByUser(selectedUser.id).then(setSelectedUserBeneficiaries).catch(() => {});
+    } else {
+      setSelectedUserBeneficiaries([]);
+    }
+  }, [selectedUser]);
+
+  const handleAddBeneficiary = async () => {
+    if (!selectedUser || !beneficiaryForm.name || !beneficiaryForm.accountNumber) {
+      toast.error('Name and account number are required.');
+      return;
+    }
+    setActionLoading('add-beneficiary');
+    try {
+      const newBen = await adminCreateBeneficiary({
+        userId: selectedUser.id,
+        name: beneficiaryForm.name,
+        accountNumber: beneficiaryForm.accountNumber,
+        bankName: beneficiaryForm.bankName,
+        ifscCode: beneficiaryForm.ifscCode,
+        nickname: beneficiaryForm.nickname,
+      });
+      setSelectedUserBeneficiaries(prev => [...prev, newBen]);
+      setShowAddBeneficiary(false);
+      setBeneficiaryForm({ name: '', accountNumber: '', bankName: 'NeoBank', ifscCode: '', nickname: '' });
+      toast.success('Beneficiary added successfully.');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || 'Failed to add beneficiary.');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleDeleteBeneficiary = async (beneficiaryId: string) => {
+    setActionLoading('delete-ben-' + beneficiaryId);
+    try {
+      const result = await deleteBeneficiary(beneficiaryId);
+      if (result.success) {
+        setSelectedUserBeneficiaries(prev => prev.filter(b => b.id !== beneficiaryId));
+        toast.success('Beneficiary removed.');
+      } else {
+        toast.error(result.error || 'Failed to delete beneficiary.');
+      }
+    } catch (err) {
+      toast.error('Failed to delete beneficiary.');
+    } finally {
+      setActionLoading(null);
+      setBeneficiaryDeleteConfirm(null);
     }
   };
 
@@ -970,6 +1034,62 @@ export default function AdminConsole() {
                 );
               })()}
             </div>
+
+            {/* ── Beneficiaries Section ──────────────────────────────── */}
+            <div className="border border-border rounded-xl p-3 mt-3">
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  Beneficiaries ({selectedUserBeneficiaries.length})
+                </p>
+                <button
+                  onClick={() => setShowAddBeneficiary(true)}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
+                >
+                  <UserPlus className="w-3.5 h-3.5" />
+                  Add
+                </button>
+              </div>
+
+              {selectedUserBeneficiaries.length === 0 ? (
+                <div className="text-center py-4">
+                  <Users className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+                  <p className="text-xs text-muted-foreground">No beneficiaries added yet.</p>
+                  <button
+                    onClick={() => setShowAddBeneficiary(true)}
+                    className="mt-2 text-xs font-semibold text-blue-600 hover:text-blue-700"
+                  >
+                    + Add a beneficiary
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {selectedUserBeneficiaries.map(b => (
+                    <div key={b.id} className="flex items-center gap-3 bg-muted/30 rounded-xl p-3 group">
+                      <div className="w-8 h-8 rounded-full gradient-primary flex items-center justify-center text-white text-xs font-bold shrink-0">
+                        {b.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-semibold text-foreground">{b.name}</p>
+                          {b.nickname && <span className="text-xs text-muted-foreground italic">"{b.nickname}"</span>}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span className="font-mono">{b.accountNumber}</span>
+                          <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-700">{b.bankName}</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setBeneficiaryDeleteConfirm(b.id)}
+                        className="p-1.5 rounded-lg text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-red-600 hover:bg-red-50 transition-all"
+                        title="Remove beneficiary"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -1423,6 +1543,101 @@ export default function AdminConsole() {
                   <Trash2 className="w-4 h-4" />
                 )}
                 Delete User
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Add Beneficiary Modal (in user detail context) ──────────── */}
+      {showAddBeneficiary && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setShowAddBeneficiary(false)}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div className="relative z-10 bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-slide-up" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="font-heading font-bold text-lg flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-blue-600" />
+                Add Beneficiary for {selectedUser?.name?.split(' ')[0]}
+              </h3>
+              <button onClick={() => setShowAddBeneficiary(false)} className="p-1.5 rounded-lg hover:bg-muted">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {[
+                { field: 'name' as const, label: 'Full Name', placeholder: 'John Smith', required: true },
+                { field: 'accountNumber' as const, label: 'Account Number', placeholder: '1234-5678-9012-3456', required: true },
+                { field: 'bankName' as const, label: 'Bank Name', placeholder: 'NeoBank', required: true },
+                { field: 'ifscCode' as const, label: 'IFSC / Routing Code', placeholder: 'NEOB0001234', required: false },
+                { field: 'nickname' as const, label: 'Nickname', placeholder: 'e.g. Mom, Landlord', required: false },
+              ].map(({ field, label, placeholder, required }) => (
+                <div key={field}>
+                  <label className="block text-xs font-semibold text-foreground mb-1.5">
+                    {label} {required && <span className="text-red-500">*</span>}
+                  </label>
+                  <input
+                    value={beneficiaryForm[field]}
+                    onChange={e => setBeneficiaryForm(f => ({ ...f, [field]: e.target.value }))}
+                    placeholder={placeholder}
+                    className="w-full px-3 py-2.5 bg-background border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="flex gap-3 mt-5">
+              <button
+                onClick={() => setShowAddBeneficiary(false)}
+                className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold text-foreground hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddBeneficiary}
+                disabled={actionLoading === 'add-beneficiary'}
+                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+              >
+                {actionLoading === 'add-beneficiary' ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <UserPlus className="w-4 h-4" />
+                )}
+                Add Beneficiary
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Delete Beneficiary Confirmation ─────────────────────────── */}
+      {beneficiaryDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setBeneficiaryDeleteConfirm(null)}>
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div className="relative z-10 bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-slide-up" onClick={e => e.stopPropagation()}>
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 className="w-6 h-6 text-red-600" />
+            </div>
+            <h3 className="font-heading font-bold text-base text-center mb-1">Remove Beneficiary?</h3>
+            <p className="text-sm text-muted-foreground text-center mb-5">This action cannot be undone.</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setBeneficiaryDeleteConfirm(null)}
+                className="flex-1 py-2.5 border border-border rounded-xl text-sm font-semibold hover:bg-muted transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteBeneficiary(beneficiaryDeleteConfirm)}
+                disabled={actionLoading === 'delete-ben-' + beneficiaryDeleteConfirm}
+                className="flex-1 bg-red-500 hover:bg-red-600 text-white py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {actionLoading === 'delete-ben-' + beneficiaryDeleteConfirm ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4" />
+                )}
+                Remove
               </button>
             </div>
           </div>

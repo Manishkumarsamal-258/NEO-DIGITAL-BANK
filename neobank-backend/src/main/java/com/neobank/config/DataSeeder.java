@@ -56,6 +56,8 @@ public class DataSeeder implements CommandLineRunner {
                 User.UserRole.customer, "+1 (555) 678-9012", "654 Birch Lane, Phoenix, AZ 85001", "EW");
         emma.setStatus(User.UserStatus.suspended);
         userRepository.save(emma);
+        User akash = saveUser("Akash Kumar", "akash@neobank.com", "password123",
+                User.UserRole.customer, "+1 (555) 789-0123", "987 Cedar Drive, San Francisco, CA 94101", "AK");
 
         Account acc1 = saveAccount(alice.getId(), "4521-8736-1092-3847",
                 Account.AccountType.savings, 1850000.50, "INR", 3.5);
@@ -67,6 +69,8 @@ public class DataSeeder implements CommandLineRunner {
                 Account.AccountType.checking, 95000.00, "INR", 0.5);
         acc4.setStatus(Account.AccountStatus.frozen);
         accountRepository.save(acc4);
+        Account acc5 = saveAccount(akash.getId(), "9368-4350-2662-4153",
+                Account.AccountType.savings, 5000.00, "INR", 3.5);
 
         saveBeneficiary(alice.getId(), "Bob Martinez", "1234-5678-9012-3456",
                 "NeoBank", "NEOB0001234", "Bob");

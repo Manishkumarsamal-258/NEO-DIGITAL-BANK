@@ -1,14 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import AppLayout from '@/components/layout/AppLayout';
 import AccountCard from '@/components/features/AccountCard';
 import { requireAuth } from '@/lib/auth';
 import { getAccounts } from '@/services/accountService';
 import { getBeneficiaries } from '@/services/beneficiaryService';
 import { transfer } from '@/services/transactionService';
+import { lookupAccountByNumber } from '@/services/adminService';
 import { useDataRefresh } from '@/contexts/DataRefreshContext';
 import { formatCurrency } from '@/lib/mockData';
 import type { Account, Beneficiary, Transaction, User } from '@/types';
-import { ArrowLeftRight, CheckCircle2, ChevronDown, AlertCircle, RefreshCw } from 'lucide-react';
+import { ArrowLeftRight, CheckCircle2, ChevronDown, AlertCircle, RefreshCw, TrendingDown, TrendingUp, Search, XCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 type Step = 'form' | 'review' | 'success';
@@ -20,8 +21,9 @@ export default function TransferPage() {
   const [step, setStep] = useState<Step>('form');
   const [processing, setProcessing] = useState(false);
   const [completedTx, setCompletedTx] = useState<Transaction | null>(null);
-  const { triggerRefresh } = useDataRefresh();
+  const { triggerRefresh, refreshKey } = useDataRefresh();
   const [loading, setLoading] = useState(true);
+  const [initialBalance, setInitialBalance] = useState<number | null>(null);
 
   const [fromAccountId, setFromAccountId] = useState('');
   const [toBeneficiaryId, setToBeneficiaryId] = useState('');
@@ -30,14 +32,61 @@ export default function TransferPage() {
   const [transferType, setTransferType] = useState<'beneficiary' | 'manual'>('beneficiary');
   const [manualAccountNum, setManualAccountNum] = useState('');
 
-  useEffect(() => {
-    const u = requireAuth();
-    if (!u) return;
-    setUser(u);
-    loadData(u);
-  }, []);
+  // ── Account number validation state ──────────────────────────
+  const [accountLookup, setAccountLookup] = useState<{
+    status: 'idle' | 'checking' | 'valid' | 'invalid';
+    ownerName?: string;
+    ownerEmail?: string;
+    message?: string;
+  }>({ status: 'idle' });
+  const lookupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const loadData = async (u: User) => {
+  const validateAccountNumber = useCallback(async (accNum: string) => {
+    if (!accNum || accNum.length < 4) {
+      setAccountLookup({ status: 'idle' });
+      return;
+    }
+    setAccountLookup({ status: 'checking' });
+    try {
+      const result = await lookupAccountByNumber(accNum);
+      if (result) {
+        // Prevent self-transfer: check if this account belongs to the current user
+        const isOwnAccount = accounts.some(a => a.accountNumber === accNum && a.userId === user?.id);
+        if (isOwnAccount) {
+          setAccountLookup({ status: 'invalid', message: 'This is your own account. Cannot transfer to self.' });
+        } else {
+          setAccountLookup({
+            status: 'valid',
+            ownerName: result.ownerName,
+            ownerEmail: result.ownerEmail,
+          });
+        }
+      } else {
+        setAccountLookup({
+          status: 'invalid',
+          message: 'Account not found. Please verify the account number. Only registered NeoBank accounts can receive transfers.',
+        });
+      }
+    } catch (err) {
+      setAccountLookup({ status: 'idle' });
+    }
+  }, [accounts, user]);
+
+  // Debounced account lookup as user types
+  const handleManualAccountChange = (value: string) => {
+    setManualAccountNum(value);
+    if (lookupTimeoutRef.current) clearTimeout(lookupTimeoutRef.current);
+    if (!value || value.length < 4) {
+      setAccountLookup({ status: 'idle' });
+      return;
+    }
+    setAccountLookup({ status: 'checking' });
+    lookupTimeoutRef.current = setTimeout(() => {
+      validateAccountNumber(value);
+    }, 600);
+  };
+
+  const loadData = useCallback(async (u: User, preserveSelection: boolean = false) => {
     try {
       const [accs, bens] = await Promise.all([
         getAccounts(),
@@ -47,17 +96,36 @@ export default function TransferPage() {
       const userBens = bens.filter(b => b.userId === u.id);
       setAccounts(activeAccs);
       setBeneficiaries(userBens);
-      if (activeAccs.length > 0) setFromAccountId(activeAccs[0].id);
+      // Preserve selected account if it's still valid, otherwise pick first
+      if (!preserveSelection || !activeAccs.find(a => a.id === fromAccountId)) {
+        if (activeAccs.length > 0) setFromAccountId(activeAccs[0].id);
+      }
     } catch (err) {
       console.error('Failed to load transfer data:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [fromAccountId]);
+
+  useEffect(() => {
+    const u = requireAuth();
+    if (!u) return;
+    setUser(u);
+    loadData(u);
+  }, []);
+
+  // Re-fetch account data whenever refreshKey changes (triggered by deposits/transfers elsewhere)
+  useEffect(() => {
+    if (user && step === 'form') {
+      loadData(user, true);
+    }
+  }, [refreshKey, step, user, loadData]);
 
   const fromAccount = accounts.find(a => a.id === fromAccountId);
   const selectedBeneficiary = beneficiaries.find(b => b.id === toBeneficiaryId);
   const transferAmount = parseFloat(amount);
+  // Compute the new balance directly so the success screen shows accurate data immediately
+  const newBalance = initialBalance !== null ? initialBalance - (completedTx?.amount ?? 0) : fromAccount?.balance ?? 0;
 
   const validate = () => {
     if (!fromAccountId) { toast.error('Please select a source account.'); return false; }
@@ -66,6 +134,10 @@ export default function TransferPage() {
     if (transferAmount < 1) { toast.error('Minimum transfer amount is ₹1.00'); return false; }
     if (transferType === 'beneficiary' && !toBeneficiaryId) { toast.error('Please select a beneficiary.'); return false; }
     if (transferType === 'manual' && !manualAccountNum) { toast.error('Please enter the account number.'); return false; }
+    if (transferType === 'manual' && accountLookup.status !== 'valid') {
+      toast.error('Destination account is not verified. Please enter a valid registered account number.');
+      return false;
+    }
     return true;
   };
 
@@ -73,6 +145,9 @@ export default function TransferPage() {
 
   const handleConfirm = async () => {
     setProcessing(true);
+    // Save the current balance before the transfer for display comparison
+    if (fromAccount) setInitialBalance(fromAccount.balance);
+    
     try {
       const result = await transfer({
         fromAccountId,
@@ -87,6 +162,10 @@ export default function TransferPage() {
         setStep('success');
         toast.success('Transfer completed successfully!');
         triggerRefresh();
+        // Immediately reload accounts to reflect updated balances
+        if (user) {
+          setTimeout(() => loadData(user, true), 300);
+        }
       } else {
         toast.error(result.error || 'Transfer failed.');
         setStep('form');
@@ -105,7 +184,8 @@ export default function TransferPage() {
     setDescription('');
     setToBeneficiaryId('');
     setManualAccountNum('');
-    if (user) loadData(user);
+    setInitialBalance(null);
+    // Data reload is handled by the refreshKey/step useEffect above
   };
 
   if (loading) {
@@ -188,12 +268,59 @@ export default function TransferPage() {
                   <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
                 </div>
               ) : (
-                <input
-                  value={manualAccountNum}
-                  onChange={e => setManualAccountNum(e.target.value)}
-                  placeholder="Account number (e.g. 1234-5678-9012-3456)"
-                  className="w-full px-4 py-3 bg-white border border-border rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-all font-mono"
-                />
+                <div className="space-y-2">
+                  <div className="relative">
+                    <input
+                      value={manualAccountNum}
+                      onChange={e => handleManualAccountChange(e.target.value)}
+                      placeholder="Account number (e.g. 1234-5678-9012-3456)"
+                      className={`w-full px-4 py-3 bg-white border rounded-xl text-sm focus:outline-none focus:ring-2 transition-all font-mono ${
+                        accountLookup.status === 'valid'
+                          ? 'border-green-400 focus:ring-green-200 focus:border-green-400'
+                          : accountLookup.status === 'invalid'
+                            ? 'border-red-400 focus:ring-red-200 focus:border-red-400'
+                            : 'border-border focus:ring-primary/30 focus:border-primary'
+                      }`}
+                    />
+                    {accountLookup.status === 'checking' && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />
+                      </div>
+                    )}
+                    {accountLookup.status === 'valid' && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <CheckCircle2 className="w-4 h-4 text-green-500" />
+                      </div>
+                    )}
+                    {accountLookup.status === 'invalid' && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <XCircle className="w-4 h-4 text-red-500" />
+                      </div>
+                    )}
+                  </div>
+                  {/* Validation feedback */}
+                  {accountLookup.status === 'valid' && (
+                    <div className="flex items-center gap-1.5 text-xs text-green-600 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                      <span>
+                        <strong className="font-semibold">{accountLookup.ownerName}</strong>
+                        <span className="text-green-500"> · {accountLookup.ownerEmail}</span>
+                      </span>
+                    </div>
+                  )}
+                  {accountLookup.status === 'invalid' && (
+                    <div className="flex items-start gap-1.5 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                      <XCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                      <span>{accountLookup.message}</span>
+                    </div>
+                  )}
+                  {accountLookup.status === 'idle' && manualAccountNum.length > 0 && manualAccountNum.length < 4 && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Search className="w-3 h-3" />
+                      Continue typing to verify account...
+                    </p>
+                  )}
+                </div>
               )}
             </div>
 
@@ -298,6 +425,33 @@ export default function TransferPage() {
                 <span className="text-sm font-semibold">{completedTx.beneficiaryName}</span>
               </div>
             </div>
+            {/* Balance impact summary — uses computed values so it's accurate immediately */}
+            {fromAccount && initialBalance !== null && (
+              <div className="bg-muted/30 rounded-xl p-4 space-y-2 text-left mb-6 border border-border">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Balance Update</p>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <TrendingDown className="w-3.5 h-3.5 text-red-500" />
+                    Previous Balance
+                  </span>
+                  <span className="font-semibold">{formatCurrency(initialBalance)}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <ArrowLeftRight className="w-3.5 h-3.5 text-primary" />
+                    Transferred
+                  </span>
+                  <span className="font-semibold text-red-500">-{formatCurrency(completedTx.amount)}</span>
+                </div>
+                <div className="border-t border-border pt-2 flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <TrendingUp className="w-3.5 h-3.5 text-green-500" />
+                    Current Balance
+                  </span>
+                  <span className="font-bold text-green-600 text-base">{formatCurrency(newBalance)}</span>
+                </div>
+              </div>
+            )}
             <button
               onClick={handleReset}
               className="w-full gradient-primary text-white font-semibold py-3 rounded-xl hover:opacity-90 transition-opacity"

@@ -63,7 +63,7 @@ public class TellerController {
                 }
                 accountId = accounts.get(0).getId();
             }
-            accountService.deposit(accountId, request.getAmount());
+            // createAccountTransaction handles both the balance update and the transaction record
             Transaction tx = transactionService.createAccountTransaction(
                     request.getUserId(), accountId, request.getAmount(), request.getDescription(),
                     com.neobank.model.Transaction.TransactionType.credit,
@@ -89,7 +89,7 @@ public class TellerController {
                 }
                 accountId = accounts.get(0).getId();
             }
-            accountService.withdraw(accountId, request.getAmount());
+            // createAccountTransaction handles both the balance update and the transaction record
             Transaction tx = transactionService.createAccountTransaction(
                     request.getUserId(), accountId, request.getAmount(), request.getDescription(),
                     com.neobank.model.Transaction.TransactionType.debit,

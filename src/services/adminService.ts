@@ -1,5 +1,5 @@
-import api from './api';
-import type { Account, KycDocument, Transaction, User } from '@/types';
+import api, { publicApi } from './api';
+import type { Account, Beneficiary, KycDocument, Transaction, User } from '@/types';
 
 export async function getAllUsers(): Promise<User[]> {
   const response = await api.get('/admin/users');
@@ -92,5 +92,46 @@ export async function rejectKyc(kycId: string, remarks: string): Promise<KycDocu
 
 export async function submitKyc(userId: string, documentType: string, documentNumber: string, documentImageUrl?: string): Promise<KycDocument> {
   const response = await api.post('/admin/kyc/submit', { userId, documentType, documentNumber, documentImageUrl });
+  return response.data.data;
+}
+
+// ── Account Lookup ───────────────────────────────────────────────────────────
+// Uses publicApi (no auth redirect interceptor) so 403/404 errors never redirect to login.
+
+export async function lookupAccountByNumber(accountNumber: string): Promise<{
+  account: Account;
+  ownerName: string;
+  ownerEmail: string;
+} | null> {
+  try {
+    const response = await publicApi.get(`/accounts/lookup/${encodeURIComponent(accountNumber)}`);
+    return response.data.data;
+  } catch (_err) {
+    // Any error (404 not found, 403 forbidden, network error) → gracefully return null
+    return null;
+  }
+}
+
+// ── Admin Beneficiary Management ─────────────────────────────────────────────
+
+export async function getAllBeneficiaries(): Promise<Beneficiary[]> {
+  const response = await api.get('/admin/beneficiaries');
+  return response.data.data;
+}
+
+export async function getBeneficiariesByUser(userId: string): Promise<Beneficiary[]> {
+  const response = await api.get(`/admin/beneficiaries/user/${userId}`);
+  return response.data.data;
+}
+
+export async function adminCreateBeneficiary(data: {
+  userId: string;
+  name: string;
+  accountNumber: string;
+  bankName: string;
+  ifscCode?: string;
+  nickname?: string;
+}): Promise<Beneficiary> {
+  const response = await api.post('/admin/beneficiaries', data);
   return response.data.data;
 }

@@ -138,6 +138,25 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     passwords[body.email] = body.password;
     savePasswords(passwords);
     setCurrentUser(newUser);
+
+    // ── Auto-create a savings account for the new user ────────────
+    const accounts = getAccounts();
+    const accountNumber = `${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const newAccount: Account = {
+      id: generateId(),
+      userId: newUser.id,
+      accountNumber,
+      accountType: 'savings',
+      balance: 0,
+      currency: 'INR',
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      interestRate: 3.5,
+    };
+    accounts.push(newAccount);
+    saveAccounts(accounts);
+
+    // Include account info in the response so the frontend has it immediately
     return ok({
       token: generateToken(newUser),
       id: newUser.id,
@@ -149,6 +168,12 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
       createdAt: newUser.createdAt,
       status: newUser.status,
       avatarInitials: newUser.avatarInitials,
+      account: {
+        id: newAccount.id,
+        accountNumber: newAccount.accountNumber,
+        accountType: newAccount.accountType,
+        balance: newAccount.balance,
+      },
     });
   }
 
@@ -187,6 +212,25 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     return ok(accounts);
   }
 
+  // ── Account Lookup (MUST be before generic /accounts/{id}) ──
+  // If this comes AFTER the generic handler, /accounts/lookup/{num}
+  // would be caught by ^\/accounts\/(.+)$ with id='lookup/...' and fail.
+  const accountLookupMatch = url?.match(/^\/accounts\/lookup\/(.+)$/);
+  if (accountLookupMatch && method === 'get') {
+    const accountNumber = decodeURIComponent(accountLookupMatch[1]);
+    const accounts = getAccounts();
+    const account = accounts.find(a => a.accountNumber === accountNumber);
+    if (!account) return fail('Account not found. Please verify the account number.', 404);
+    const users = getUsers();
+    const owner = users.find(u => u.id === account.userId);
+    return ok({
+      account,
+      ownerName: owner?.name || 'Unknown',
+      ownerEmail: owner?.email || 'Unknown',
+    });
+  }
+
+  // ── Generic /accounts/{id} (get account by internal ID) ──
   const accountMatch = url?.match(/^\/accounts\/(.+)$/);
   if (accountMatch && method === 'get') {
     requireUser();
@@ -266,12 +310,33 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     }
     if (!toAccount) return fail('Destination account not found.', 404);
 
+    // Prevent self-transfer
+    if (fromAccount.id === toAccount.id) {
+      return fail('Cannot transfer to the same account.', 400);
+    }
+
     // Update balances
     fromAccount.balance -= body.amount;
     toAccount.balance += body.amount;
     saveAccounts(accounts);
 
-    const transaction: Transaction = {
+    const ref = generateRef();
+    const now = new Date().toISOString();
+
+    // Find beneficiary name for display
+    let beneficiaryName: string | undefined;
+    if (body.toBeneficiaryId) {
+      const ben = getBeneficiaries().find(b => b.id === body.toBeneficiaryId);
+      if (ben) beneficiaryName = ben.name;
+    }
+    if (!beneficiaryName) {
+      // Look up the user who owns the destination account
+      const toUser = getUsers().find(u => u.id === toAccount!.userId);
+      beneficiaryName = toUser?.name || 'Unknown';
+    }
+
+    // Create transaction record for the SENDER (outgoing transfer)
+    const senderTransaction: Transaction = {
       id: generateId(),
       fromAccountId: body.fromAccountId,
       toAccountId: toAccount.id,
@@ -279,16 +344,35 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
       type: 'transfer',
       amount: body.amount,
       currency: 'INR',
-      description: body.description || 'Transfer',
+      description: body.description || 'Transfer sent',
       status: 'completed',
-      reference: generateRef(),
-      createdAt: new Date().toISOString(),
+      reference: ref,
+      createdAt: now,
+      beneficiaryName: beneficiaryName,
       category: 'Transfer',
     };
+
+    // Create transaction record for the RECEIVER (incoming credit)
+    const receiverTransaction: Transaction = {
+      id: generateId(),
+      fromAccountId: body.fromAccountId,
+      toAccountId: toAccount.id,
+      userId: toAccount.userId,
+      type: 'credit',
+      amount: body.amount,
+      currency: 'INR',
+      description: body.description || 'Transfer received',
+      status: 'completed',
+      reference: ref,
+      createdAt: now,
+      beneficiaryName: user.name,
+      category: 'Transfer',
+    };
+
     const transactions = getTransactions();
-    transactions.unshift(transaction);
+    transactions.unshift(senderTransaction, receiverTransaction);
     saveTransactions(transactions);
-    return ok(transaction, 'Transfer completed successfully.');
+    return ok(senderTransaction, 'Transfer completed successfully.');
   }
 
   if (url === '/transactions/deposit' && method === 'post' && data) {
@@ -395,6 +479,90 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
   }
 
   if (url === '/admin/users' && method === 'get') return ok(getUsers());
+
+  // ── Admin: Create User (creates user + account + password) ───────
+  if (url === '/admin/users' && method === 'post' && data) {
+    requireUser();
+    const body = JSON.parse(data as string);
+    const users = getUsers();
+    const passwords = getPasswords();
+    if (users.find(u => u.email === body.email)) return fail('Email already registered.', 409);
+    const newUser: User = {
+      id: generateId(),
+      name: body.name,
+      email: body.email,
+      role: body.role || 'customer',
+      phone: body.phone || '',
+      address: body.address || '',
+      createdAt: new Date().toISOString().split('T')[0],
+      status: body.status || 'active',
+      avatarInitials: body.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2),
+    };
+    users.push(newUser);
+    saveUsers(users);
+    if (body.password) {
+      passwords[body.email] = body.password;
+      savePasswords(passwords);
+    }
+    // Auto-create a savings account for the new user
+    const accounts = getAccounts();
+    const accountNumber = `${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const newAccount: Account = {
+      id: generateId(),
+      userId: newUser.id,
+      accountNumber,
+      accountType: 'savings',
+      balance: 0,
+      currency: 'INR',
+      status: 'active',
+      createdAt: new Date().toISOString(),
+      interestRate: 3.5,
+    };
+    accounts.push(newAccount);
+    saveAccounts(accounts);
+    return ok(newUser, 'User and account created successfully.');
+  }
+
+  // ── Admin: Update User ───────────────────────────────────────────
+  const adminUserUpdateMatch = url?.match(/^\/admin\/users\/([^/]+)$/);
+  if (adminUserUpdateMatch && method === 'put' && data) {
+    requireUser();
+    const userId = adminUserUpdateMatch[1];
+    const body = JSON.parse(data as string);
+    const users = getUsers();
+    const idx = users.findIndex(u => u.id === userId);
+    if (idx === -1) return fail('User not found.', 404);
+    // Update allowed fields
+    if (body.name) users[idx].name = body.name;
+    if (body.email) users[idx].email = body.email;
+    if (body.phone !== undefined) users[idx].phone = body.phone;
+    if (body.address !== undefined) users[idx].address = body.address;
+    if (body.role) users[idx].role = body.role;
+    if (body.status) users[idx].status = body.status;
+    if (body.password) {
+      const passwords = getPasswords();
+      passwords[users[idx].email] = body.password;
+      savePasswords(passwords);
+    }
+    saveUsers(users);
+    return ok(users[idx], 'User updated successfully.');
+  }
+
+  // ── Admin: Delete User ───────────────────────────────────────────
+  if (adminUserUpdateMatch && method === 'delete') {
+    requireUser();
+    const userId = adminUserUpdateMatch[1];
+    const users = getUsers().filter(u => u.id !== userId);
+    saveUsers(users);
+    // Also remove their accounts
+    const accounts = getAccounts().filter(a => a.userId !== userId);
+    saveAccounts(accounts);
+    // Also remove their transactions
+    const transactions = getTransactions().filter(t => t.userId !== userId);
+    saveTransactions(transactions);
+    return ok(null, 'User and all associated data deleted.');
+  }
+
   if (url === '/admin/accounts' && method === 'get') return ok(getAccounts());
   if (url === '/admin/transactions' && method === 'get') return ok(getTransactions());
   if (url === '/admin/transactions/failed' && method === 'get') {
@@ -532,6 +700,38 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     accounts[idx].status = accounts[idx].status === 'active' ? 'frozen' : 'active';
     saveAccounts(accounts);
     return ok(accounts[idx], `Account ${accounts[idx].status === 'frozen' ? 'frozen' : 'unfrozen'} successfully.`);
+  }
+
+  // ── Admin: Beneficiary Management ────────────────────────────
+  if (url === '/admin/beneficiaries' && method === 'get') {
+    requireUser();
+    return ok(getBeneficiaries());
+  }
+
+  if (url === '/admin/beneficiaries' && method === 'post' && data) {
+    requireUser();
+    const body = JSON.parse(data as string);
+    const beneficiary: Beneficiary = {
+      id: generateId(),
+      userId: body.userId,
+      name: body.name,
+      accountNumber: body.accountNumber,
+      bankName: body.bankName,
+      ifscCode: body.ifscCode || '',
+      nickname: body.nickname || '',
+      addedAt: new Date().toISOString(),
+    };
+    const beneficiaries = getBeneficiaries();
+    beneficiaries.push(beneficiary);
+    saveBeneficiaries(beneficiaries);
+    return ok(beneficiary, 'Beneficiary added successfully.');
+  }
+
+  const adminBeneficiaryMatch = url?.match(/^\/admin\/beneficiaries\/user\/(.+)$/);
+  if (adminBeneficiaryMatch && method === 'get') {
+    requireUser();
+    const userId = adminBeneficiaryMatch[1];
+    return ok(getBeneficiaries().filter(b => b.userId === userId));
   }
 
   // ── Fallback ────────────────────────────────────────────

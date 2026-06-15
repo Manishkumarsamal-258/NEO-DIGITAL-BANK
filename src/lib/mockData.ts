@@ -57,6 +57,17 @@ export const SEED_USERS: User[] = [
     status: 'suspended',
     avatarInitials: 'EW',
   },
+  {
+    id: 'u6',
+    name: 'Akash Kumar',
+    email: 'akash@neobank.com',
+    role: 'customer',
+    phone: '+1 (555) 789-0123',
+    address: '987 Cedar Drive, San Francisco, CA 94101',
+    createdAt: '2024-04-15',
+    status: 'active',
+    avatarInitials: 'AK',
+  },
 ];
 
 export const SEED_PASSWORDS: Record<string, string> = {
@@ -65,6 +76,7 @@ export const SEED_PASSWORDS: Record<string, string> = {
   'teller@neobank.com': 'teller123',
   'admin@neobank.com': 'admin123',
   'emma@neobank.com': 'password123',
+  'akash@neobank.com': 'password123',
 };
 
 // ── Seed accounts ────────────────────────────────────────────────────────────
@@ -112,6 +124,17 @@ export const SEED_ACCOUNTS: Account[] = [
     status: 'frozen',
     createdAt: '2024-03-08',
     interestRate: 0.5,
+  },
+  {
+    id: 'acc5',
+    userId: 'u6',
+    accountNumber: '9368-4350-2662-4153',
+    accountType: 'savings',
+    balance: 5000.00,
+    currency: 'INR',
+    status: 'active',
+    createdAt: '2024-04-15',
+    interestRate: 3.5,
   },
 ];
 
