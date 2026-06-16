@@ -16,6 +16,7 @@ import AdminConsole from "./pages/AdminConsole";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 import ServicesDemo from "./pages/ServicesDemo";
+import KafkaDashboard from "./pages/KafkaDashboard";
 import KycUpload from "./pages/KycUpload";
 import Deposit from "./pages/Deposit";
 import Withdraw from "./pages/Withdraw";
@@ -52,6 +53,7 @@ const App = () => (
           <Route path="/statements" element={<Statements />} />
           <Route path="/loans" element={<Loans />} />
               <Route path="/services" element={<ServicesDemo />} />
+          <Route path="/kafka" element={<KafkaDashboard />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

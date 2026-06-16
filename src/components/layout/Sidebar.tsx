@@ -18,6 +18,7 @@ import {
   Landmark,
   FileText,
   Fingerprint,
+  Network,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -38,6 +39,7 @@ const customerNav = [
   { to: '/loans', icon: Landmark, label: 'Loans' },
   { to: '/analytics', icon: PieChart, label: 'Analytics' },
   { to: '/services', icon: Shield, label: 'Services Demo' },
+  { to: '/kafka', icon: Network, label: 'Kafka Dashboard' },
   { to: '/profile', icon: UserCircle, label: 'Profile' },
 ];
 
@@ -45,6 +47,7 @@ const tellerNav = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/teller', icon: Banknote, label: 'Account Center' },
   { to: '/transactions', icon: History, label: 'Transactions' },
+  { to: '/kafka', icon: Network, label: 'Kafka Dashboard' },
   { to: '/profile', icon: UserCircle, label: 'Profile' },
 ];
 
@@ -52,6 +55,7 @@ const adminNav = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/admin', icon: Shield, label: 'Admin Console' },
   { to: '/transactions', icon: History, label: 'All Transactions' },
+  { to: '/kafka', icon: Network, label: 'Kafka Dashboard' },
   { to: '/profile', icon: UserCircle, label: 'Profile' },
 ];
 

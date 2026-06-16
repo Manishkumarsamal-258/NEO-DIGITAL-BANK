@@ -1,0 +1,320 @@
+{
+  "info": {
+    "name": "NeoBank API",
+    "description": "Complete API collection for NeoBank Digital Banking Platform",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{token}}", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080/api" },
+    { "key": "token", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.success && jsonData.data.token) {",
+                  "  pm.collectionVariables.set('token', jsonData.data.token);",
+                  "  pm.collectionVariables.set('userId', jsonData.data.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"alice@neobank.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+          }
+        },
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"SecurePass123\",\n  \"phone\": \"+1 (555) 111-2222\",\n  \"address\": \"456 Main St\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/register", "host": ["{{baseUrl}}"], "path": ["auth", "register"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Accounts",
+      "item": [
+        {
+          "name": "Get My Accounts",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/accounts", "host": ["{{baseUrl}}"], "path": ["accounts"] }
+          }
+        },
+        {
+          "name": "Get Account By ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/accounts/acc1", "host": ["{{baseUrl}}"], "path": ["accounts", "acc1"] }
+          }
+        },
+        {
+          "name": "Lookup Account By Number",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/accounts/lookup/4521-8736-1092-3847", "host": ["{{baseUrl}}"], "path": ["accounts", "lookup", "4521-8736-1092-3847"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Transactions",
+      "item": [
+        {
+          "name": "Get My Transactions",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/transactions", "host": ["{{baseUrl}}"], "path": ["transactions"] }
+          }
+        },
+        {
+          "name": "Transfer Funds",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fromAccountId\": \"acc1\",\n  \"toAccountNumber\": \"1234-5678-9012-3456\",\n  \"amount\": 100,\n  \"description\": \"Test transfer\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/transactions/transfer", "host": ["{{baseUrl}}"], "path": ["transactions", "transfer"] }
+          }
+        },
+        {
+          "name": "Self Deposit",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"acc1\",\n  \"amount\": 500,\n  \"description\": \"Cash deposit\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/transactions/deposit", "host": ["{{baseUrl}}"], "path": ["transactions", "deposit"] }
+          }
+        },
+        {
+          "name": "Self Withdrawal",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accountId\": \"acc1\",\n  \"amount\": 200,\n  \"description\": \"ATM withdrawal\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/transactions/withdraw", "host": ["{{baseUrl}}"], "path": ["transactions", "withdraw"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Beneficiaries",
+      "item": [
+        {
+          "name": "Get My Beneficiaries",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/beneficiaries", "host": ["{{baseUrl}}"], "path": ["beneficiaries"] } }
+        },
+        {
+          "name": "Add Beneficiary",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Bob Martinez\",\n  \"accountNumber\": \"1234-5678-9012-3456\",\n  \"bankName\": \"NeoBank\",\n  \"ifscCode\": \"NEOB0001234\",\n  \"nickname\": \"Bob\"\n}" },
+            "url": { "raw": "{{baseUrl}}/beneficiaries", "host": ["{{baseUrl}}"], "path": ["beneficiaries"] }
+          }
+        },
+        {
+          "name": "Update Beneficiary",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\"nickname\": \"Bob Updated\"}" },
+            "url": { "raw": "{{baseUrl}}/beneficiaries/ben1", "host": ["{{baseUrl}}"], "path": ["beneficiaries", "ben1"] }
+          }
+        },
+        {
+          "name": "Delete Beneficiary",
+          "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/beneficiaries/ben1", "host": ["{{baseUrl}}"], "path": ["beneficiaries", "ben1"] } }
+        }
+      ]
+    },
+    {
+      "name": "User Profile",
+      "item": [
+        {
+          "name": "Get Profile",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/users/me", "host": ["{{baseUrl}}"], "path": ["users", "me"] } }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\"name\": \"Alice J.\",\"phone\": \"+1 (555) 999-9999\"}" },
+            "url": { "raw": "{{baseUrl}}/users/me", "host": ["{{baseUrl}}"], "path": ["users", "me"] }
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "PUT",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\"currentPassword\": \"password123\",\"newPassword\": \"newPass456\"}" },
+            "url": { "raw": "{{baseUrl}}/users/me/password", "host": ["{{baseUrl}}"], "path": ["users", "me", "password"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "KYC",
+      "item": [
+        {
+          "name": "Get KYC Status",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/kyc/status", "host": ["{{baseUrl}}"], "path": ["kyc", "status"] } }
+        },
+        {
+          "name": "Get My KYC Docs",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/kyc/my", "host": ["{{baseUrl}}"], "path": ["kyc", "my"] } }
+        },
+        {
+          "name": "Submit KYC",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\n  \"documentType\": \"AADHAR\",\n  \"documentNumber\": \"1234-5678-9012\"\n}" },
+            "url": { "raw": "{{baseUrl}}/kyc/submit", "host": ["{{baseUrl}}"], "path": ["kyc", "submit"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Teller",
+      "item": [
+        {
+          "name": "List Customers",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/teller/customers", "host": ["{{baseUrl}}"], "path": ["teller", "customers"] } }
+        },
+        {
+          "name": "Get Customer Accounts",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/teller/customers/u1/accounts", "host": ["{{baseUrl}}"], "path": ["teller", "customers", "u1", "accounts"] } }
+        },
+        {
+          "name": "Create Account (Teller)",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\"userId\": \"u1\",\"accountType\": \"savings\",\"initialDeposit\": 1000}" },
+            "url": { "raw": "{{baseUrl}}/teller/accounts", "host": ["{{baseUrl}}"], "path": ["teller", "accounts"] }
+          }
+        },
+        {
+          "name": "Teller Deposit",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\"userId\": \"u1\",\"accountId\": \"acc1\",\"amount\": 500,\"description\": \"Cash deposit by teller\"}" },
+            "url": { "raw": "{{baseUrl}}/teller/transactions/deposit", "host": ["{{baseUrl}}"], "path": ["teller", "transactions", "deposit"] }
+          }
+        },
+        {
+          "name": "Teller Withdrawal",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\"userId\": \"u1\",\"accountId\": \"acc1\",\"amount\": 200,\"description\": \"Cash withdrawal by teller\"}" },
+            "url": { "raw": "{{baseUrl}}/teller/transactions/withdraw", "host": ["{{baseUrl}}"], "path": ["teller", "transactions", "withdraw"] }
+          }
+        },
+        {
+          "name": "Toggle Freeze Account",
+          "request": { "method": "PUT", "url": { "raw": "{{baseUrl}}/teller/accounts/acc1/freeze", "host": ["{{baseUrl}}"], "path": ["teller", "accounts", "acc1", "freeze"] } }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Get All Users",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/admin/users", "host": ["{{baseUrl}}"], "path": ["admin", "users"] } }
+        },
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\"name\": \"New User\",\"email\": \"new@neobank.com\",\"password\": \"pass123\",\"role\": \"customer\",\"status\": \"active\"}" },
+            "url": { "raw": "{{baseUrl}}/admin/users", "host": ["{{baseUrl}}"], "path": ["admin", "users"] }
+          }
+        },
+        {
+          "name": "Toggle User Status",
+          "request": { "method": "PUT", "url": { "raw": "{{baseUrl}}/admin/users/u5/toggle-status", "host": ["{{baseUrl}}"], "path": ["admin", "users", "u5", "toggle-status"] } }
+        },
+        {
+          "name": "Delete User",
+          "request": { "method": "DELETE", "url": { "raw": "{{baseUrl}}/admin/users/u5", "host": ["{{baseUrl}}"], "path": ["admin", "users", "u5"] } }
+        },
+        {
+          "name": "Get All Accounts",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/admin/accounts", "host": ["{{baseUrl}}"], "path": ["admin", "accounts"] } }
+        },
+        {
+          "name": "Get All Transactions",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/admin/transactions", "host": ["{{baseUrl}}"], "path": ["admin", "transactions"] } }
+        },
+        {
+          "name": "Get Failed Transactions",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/admin/transactions/failed", "host": ["{{baseUrl}}"], "path": ["admin", "transactions", "failed"] } }
+        },
+        {
+          "name": "Get KYC Stats",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/admin/kyc/stats", "host": ["{{baseUrl}}"], "path": ["admin", "kyc", "stats"] } }
+        },
+        {
+          "name": "Get Pending KYC",
+          "request": { "method": "GET", "url": { "raw": "{{baseUrl}}/admin/kyc/pending", "host": ["{{baseUrl}}"], "path": ["admin", "kyc", "pending"] } }
+        },
+        {
+          "name": "Verify KYC",
+          "request": { "method": "POST", "url": { "raw": "{{baseUrl}}/admin/kyc/verify/kyc2", "host": ["{{baseUrl}}"], "path": ["admin", "kyc", "verify", "kyc2"] } }
+        },
+        {
+          "name": "Reject KYC",
+          "request": {
+            "method": "POST",
+            "header": [ { "key": "Content-Type", "value": "application/json" } ],
+            "body": { "mode": "raw", "raw": "{\"remarks\": \"Document is blurry. Please re-upload.\"}" },
+            "url": { "raw": "{{baseUrl}}/admin/kyc/reject/kyc2", "host": ["{{baseUrl}}"], "path": ["admin", "kyc", "reject", "kyc2"] }
+          }
+        }
+      ]
+    }
+  ]
+}

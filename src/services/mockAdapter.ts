@@ -22,6 +22,7 @@ import {
   generateId, generateRef,
 } from '@/lib/mockData';
 import type { User, Account, Beneficiary, KycDocument, Transaction } from '@/types';
+import { eventBus, EVENT_TOPICS, EVENT_TYPES } from './eventBus';
 
 // ── Helpers ───────────────────────────────────────────────
 
@@ -103,6 +104,11 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     if (passwords[email] !== password) return fail('Invalid email or password.', 401);
     if (user.status === 'suspended') return fail('Your account has been suspended. Contact admin.', 403);
     setCurrentUser(user);
+    eventBus.publish(EVENT_TOPICS.AUTH, EVENT_TYPES.USER_LOGIN, {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+    }, { source: 'auth-service', severity: 'info' });
     return ok({
       token: generateToken(user),
       id: user.id,
@@ -156,6 +162,18 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     accounts.push(newAccount);
     saveAccounts(accounts);
 
+    eventBus.publish(EVENT_TOPICS.AUTH, EVENT_TYPES.USER_REGISTERED, {
+      userId: newUser.id,
+      email: newUser.email,
+      name: newUser.name,
+    }, { source: 'auth-service', severity: 'success' });
+    eventBus.publish(EVENT_TOPICS.ACCOUNTS, EVENT_TYPES.ACCOUNT_CREATED, {
+      userId: newUser.id,
+      accountId: newAccount.id,
+      accountNumber: newAccount.accountNumber,
+      accountType: newAccount.accountType,
+    }, { source: 'account-service', severity: 'success' });
+
     // Include account info in the response so the frontend has it immediately
     return ok({
       token: generateToken(newUser),
@@ -192,6 +210,9 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     users[idx] = { ...users[idx], ...updates, id: user.id };
     saveUsers(users);
     setCurrentUser(users[idx]);
+    eventBus.publish(EVENT_TOPICS.USERS, EVENT_TYPES.USER_UPDATED, {
+      userId: user.id,
+    }, { source: 'user-service', severity: 'info' });
     return ok(users[idx], 'Profile updated successfully.');
   }
 
@@ -202,11 +223,17 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     if (passwords[user.email] !== currentPassword) return fail('Current password is incorrect.', 400);
     passwords[user.email] = newPassword;
     savePasswords(passwords);
+    eventBus.publish(EVENT_TOPICS.AUTH, EVENT_TYPES.PASSWORD_CHANGED, {
+      userId: user.id,
+    }, { source: 'auth-service', severity: 'info' });
     return ok(null, 'Password changed successfully.');
   }
 
   // ── Accounts ────────────────────────────────────────────
   if (url === '/accounts' && method === 'get') {
+    eventBus.publish(EVENT_TOPICS.SYSTEM, EVENT_TYPES.DATA_REFRESHED, {
+      resource: 'accounts',
+    }, { source: 'account-service', severity: 'info', silent: true });
     const user = requireUser();
     const accounts = getAccounts().filter(a => a.userId === user.id);
     return ok(accounts);
@@ -262,6 +289,10 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     const beneficiaries = getBeneficiaries();
     beneficiaries.push(beneficiary);
     saveBeneficiaries(beneficiaries);
+    eventBus.publish(EVENT_TOPICS.BENEFICIARIES, EVENT_TYPES.BENEFICIARY_ADDED, {
+      beneficiaryId: beneficiary.id,
+      name: beneficiary.name,
+    }, { source: 'beneficiary-service', severity: 'success' });
     return ok(beneficiary, 'Beneficiary added successfully.');
   }
 
@@ -274,6 +305,9 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     if (idx === -1) return fail('Beneficiary not found.', 404);
     beneficiaries[idx] = { ...beneficiaries[idx], ...body, id: beneficiaryUpdateMatch[1] };
     saveBeneficiaries(beneficiaries);
+    eventBus.publish(EVENT_TOPICS.BENEFICIARIES, EVENT_TYPES.BENEFICIARY_UPDATED, {
+      beneficiaryId: beneficiaryUpdateMatch[1],
+    }, { source: 'beneficiary-service', severity: 'info' });
     return ok(beneficiaries[idx], 'Beneficiary updated successfully.');
   }
 
@@ -281,6 +315,9 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     requireUser();
     const beneficiaries = getBeneficiaries().filter(b => b.id !== beneficiaryUpdateMatch[1]);
     saveBeneficiaries(beneficiaries);
+    eventBus.publish(EVENT_TOPICS.BENEFICIARIES, EVENT_TYPES.BENEFICIARY_DELETED, {
+      beneficiaryId: beneficiaryUpdateMatch[1],
+    }, { source: 'beneficiary-service', severity: 'warning' });
     return ok(null, 'Beneficiary deleted successfully.');
   }
 
@@ -372,6 +409,13 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     const transactions = getTransactions();
     transactions.unshift(senderTransaction, receiverTransaction);
     saveTransactions(transactions);
+    eventBus.publish(EVENT_TOPICS.TRANSACTIONS, EVENT_TYPES.TRANSFER_COMPLETED, {
+      transactionId: senderTransaction.id,
+      fromAccount: body.fromAccountId,
+      toAccount: toAccount.id,
+      amount: body.amount,
+      status: 'completed',
+    }, { source: 'transaction-service', severity: 'success' });
     return ok(senderTransaction, 'Transfer completed successfully.');
   }
 
@@ -403,6 +447,11 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     const transactions = getTransactions();
     transactions.unshift(transaction);
     saveTransactions(transactions);
+    eventBus.publish(EVENT_TOPICS.TRANSACTIONS, EVENT_TYPES.DEPOSIT_COMPLETED, {
+      transactionId: transaction.id,
+      accountId: body.accountId,
+      amount: body.amount,
+    }, { source: 'transaction-service', severity: 'success' });
     return ok(transaction, 'Deposit completed successfully.');
   }
 
@@ -434,6 +483,11 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     const transactions = getTransactions();
     transactions.unshift(transaction);
     saveTransactions(transactions);
+    eventBus.publish(EVENT_TOPICS.TRANSACTIONS, EVENT_TYPES.WITHDRAWAL_COMPLETED, {
+      transactionId: transaction.id,
+      accountId: body.accountId,
+      amount: body.amount,
+    }, { source: 'transaction-service', severity: 'success' });
     return ok(transaction, 'Withdrawal completed successfully.');
   }
 
@@ -463,6 +517,11 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     const docs = getKycDocs();
     docs.push(doc);
     saveKycDocs(docs);
+    eventBus.publish(EVENT_TOPICS.KYC, EVENT_TYPES.KYC_SUBMITTED, {
+      documentId: doc.id,
+      documentType: doc.documentType,
+      userId: user.id,
+    }, { source: 'kyc-service', severity: 'info' });
     return ok(doc, 'KYC document submitted successfully.');
   }
 
@@ -475,6 +534,11 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     if (idx === -1) return fail('User not found.', 404);
     users[idx].status = users[idx].status === 'active' ? 'suspended' : 'active';
     saveUsers(users);
+    const isSuspended = users[idx].status === 'suspended';
+    eventBus.publish(EVENT_TOPICS.USERS, isSuspended ? EVENT_TYPES.USER_SUSPENDED : EVENT_TYPES.USER_UPDATED, {
+      userId: adminUserMatch[1],
+      status: users[idx].status,
+    }, { source: 'admin-service', severity: isSuspended ? 'warning' : 'info' });
     return ok(users[idx], 'User status updated.');
   }
 
@@ -520,6 +584,11 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     };
     accounts.push(newAccount);
     saveAccounts(accounts);
+    eventBus.publish(EVENT_TOPICS.USERS, EVENT_TYPES.USER_CREATED, {
+      userId: newUser.id,
+      email: newUser.email,
+      role: newUser.role,
+    }, { source: 'admin-service', severity: 'success' });
     return ok(newUser, 'User and account created successfully.');
   }
 
@@ -588,6 +657,11 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     docs[idx].verifiedAt = new Date().toISOString();
     docs[idx].verifiedBy = getCurrentUser()?.id || 'admin';
     saveKycDocs(docs);
+    eventBus.publish(EVENT_TOPICS.KYC, EVENT_TYPES.KYC_VERIFIED, {
+      documentId: kycVerifyMatch[1],
+      userId: docs[idx].userId,
+      verifiedBy: getCurrentUser()?.id || 'admin',
+    }, { source: 'admin-service', severity: 'success' });
     return ok(docs[idx], 'KYC document verified.');
   }
 
@@ -600,6 +674,11 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     docs[idx].status = 'rejected';
     docs[idx].remarks = body.remarks || 'Rejected';
     saveKycDocs(docs);
+    eventBus.publish(EVENT_TOPICS.KYC, EVENT_TYPES.KYC_REJECTED, {
+      documentId: kycRejectMatch[1],
+      userId: docs[idx].userId,
+      reason: body.remarks || 'Rejected',
+    }, { source: 'admin-service', severity: 'error' });
     return ok(docs[idx], 'KYC document rejected.');
   }
 
@@ -646,6 +725,12 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     const accounts = getAccounts();
     accounts.push(account);
     saveAccounts(accounts);
+    eventBus.publish(EVENT_TOPICS.ACCOUNTS, EVENT_TYPES.ACCOUNT_CREATED, {
+      userId: body.userId,
+      accountId: account.id,
+      accountNumber: account.accountNumber,
+      accountType: account.accountType,
+    }, { source: 'teller-service', severity: 'success' });
     return ok(account, 'Account created successfully.');
   }
 
@@ -667,6 +752,12 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     const txns = getTransactions();
     txns.unshift(txn);
     saveTransactions(txns);
+    eventBus.publish(EVENT_TOPICS.TRANSACTIONS, EVENT_TYPES.DEPOSIT_COMPLETED, {
+      transactionId: txn.id,
+      accountId: target.id,
+      amount: body.amount,
+      tellerOperation: true,
+    }, { source: 'teller-service', severity: 'success' });
     return ok(txn, 'Deposit successful.');
   }
 
@@ -689,6 +780,12 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     const txns = getTransactions();
     txns.unshift(txn);
     saveTransactions(txns);
+    eventBus.publish(EVENT_TOPICS.TRANSACTIONS, EVENT_TYPES.WITHDRAWAL_COMPLETED, {
+      transactionId: txn.id,
+      accountId: target.id,
+      amount: body.amount,
+      tellerOperation: true,
+    }, { source: 'teller-service', severity: 'success' });
     return ok(txn, 'Withdrawal successful.');
   }
 
@@ -699,7 +796,12 @@ export async function mockAdapter(config: AxiosRequestConfig): Promise<AxiosResp
     if (idx === -1) return fail('Account not found.', 404);
     accounts[idx].status = accounts[idx].status === 'active' ? 'frozen' : 'active';
     saveAccounts(accounts);
-    return ok(accounts[idx], `Account ${accounts[idx].status === 'frozen' ? 'frozen' : 'unfrozen'} successfully.`);
+    const isFrozen = accounts[idx].status === 'frozen';
+    eventBus.publish(EVENT_TOPICS.ACCOUNTS, isFrozen ? EVENT_TYPES.ACCOUNT_FROZEN : EVENT_TYPES.ACCOUNT_UNFROZEN, {
+      accountId: tellerFreezeMatch[1],
+      userId: accounts[idx].userId,
+    }, { source: 'teller-service', severity: 'warning' });
+    return ok(accounts[idx], `Account ${isFrozen ? 'frozen' : 'unfrozen'} successfully.`);
   }
 
   // ── Admin: Beneficiary Management ────────────────────────────

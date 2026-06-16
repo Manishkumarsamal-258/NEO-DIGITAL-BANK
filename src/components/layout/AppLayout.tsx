@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import ThemeToggle from '@/components/ui/ThemeToggle';
+import AiChatBot from '@/components/features/AiChatBot';
+import EventViewer, { LiveEventBadge } from '@/components/features/EventViewer';
 import { requireAuth } from '@/lib/auth';
 import type { User } from '@/types';
-import { Menu, Bell, Search, Sparkles } from 'lucide-react';
+import { Menu, Bell, Search, Sparkles, Activity } from 'lucide-react';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -66,11 +68,12 @@ export default function AppLayout({ children, title, subtitle }: AppLayoutProps)
               </div>
             )}
             <p className="text-[10px] text-blue-500/70 font-medium tracking-wide mt-0.5">
-              NeoBank Digital Banking · Developed by Manish Kumar Samal
+              NeoBank Digital Banking · Developed by Manish Kumar Samal · <span className="inline-flex items-center gap-1"><Activity className="w-3 h-3" />Event-Driven Architecture</span>
             </p>
           </div>
 
           <div className="ml-auto flex items-center gap-2">
+            <LiveEventBadge />
             <ThemeToggle />
             <div className="hidden md:flex items-center gap-2 bg-muted rounded-lg px-3 py-2 w-48">
               <Search className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -95,6 +98,9 @@ export default function AppLayout({ children, title, subtitle }: AppLayoutProps)
             {children}
           </div>
         </main>
+
+        {/* AI ChatBot Floating Button */}
+        <AiChatBot />
       </div>
     </div>
   );
